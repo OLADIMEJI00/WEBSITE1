@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deriv Advanced Chart</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}body{font-family:Inter,Arial;background:#000;color:#fff;height:100vh;display:flex;flex-direction:column}
+#bar{display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#111;border-bottom:1px solid #333;align-items:center;justify-content:center}
+#bar select,#bar button,#bar input{padding:6px 10px;border-radius:6px;border:1px solid #333;background:#000;color:#fff;font-size:13px}
+#bar button:hover{background:#222;cursor:pointer}.date-group{display:flex;gap:6px;align-items:center;border:1px solid #444;padding:6px;border-radius:6px;background:#0a0a0a}
+.date-group label{font-size:12px;color:#0f0}.date-input{width:130px}#status{margin-left:auto;font-size:13px;padding:4px 8px;border-radius:4px}
+.s-green{color:#0f0;background:rgba(0,255,0,0.1)}.s-yellow{color:#ff0;background:rgba(255,255,0,0.1)}.s-red{color:#f33;background:rgba(255,51,51,0.1)}
+#main{flex:1;position:relative}#chart{width:100%;height:100%}#countdown{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.8);color:#0f0;padding:6px 12px;border-radius:6px;font-weight:bold;z-index:100}
+#spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:20px;border-radius:8px;display:none;z-index:200;text-align:center;min-width:300px}
+#spinner-text{font-size:14px;margin-bottom:10px}#spinner-sub{font-size:12px;color:#888;margin-top:6px}#progress-bar{width:100%;height:8px;background:#333;border-radius:4px;overflow:hidden;margin-top:10px}
+#progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#0f0,#3f3);transition:width 0.3s}#info{padding:8px 16px;background:#0a0a0a;border-bottom:1px solid #222;font-size:13px;color:#7efc8a;display:flex;justify-content:space-between}
+#drawer{max-height:0;overflow:hidden;transition:max-height 0.3s;background:#0b0b0b;border-top:1px solid #333}#drawer.open{max-height:400px}#drawer-content{padding:20px}
+.section{margin-bottom:20px}.section h3{color:#0ff;margin-bottom:10px;font-size:14px}.controls{display:flex;gap:10px;flex-wrap:wrap}#results{padding:12px;background:#050505;border-radius:6px;color:#7efc8a;font-size:13px}
+@media (max-width:768px){#bar{gap:6px;padding:8px}.date-input{width:110px}#drawer-content{padding:12px}}
+.strategy-btn{position:relative;display:inline-block}
+.strategy-dropdown{display:none;position:absolute;background:#111;border:1px solid #333;border-radius:6px;min-width:200px;z-index:1000;margin-top:4px}
+.strategy-dropdown.show{display:block}
+.strategy-dropdown button{width:100%;text-align:left;padding:8px 12px;border:none;border-radius:0;background:#111;color:#fff;font-size:13px}
+.strategy-dropdown button:hover{background:#222}
+.strategy-dropdown button:first-child{border-radius:6px 6px 0 0}
+.strategy-dropdown button:last-child{border-radius:0 0 6px 6px}
+#strategyModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:2000;justify-content:center;align-items:center}
+#strategyModal.show{display:flex}
+.modal-content{background:#111;border:1px solid #333;border-radius:8px;padding:20px;max-width:600px;width:90%}
+.modal-content h3{color:#0ff;margin-bottom:15px}
+.modal-content textarea{width:100%;height:300px;background:#000;border:1px solid #333;border-radius:6px;color:#0f0;padding:10px;font-family:monospace;font-size:12px;resize:vertical}
+.modal-buttons{display:flex;gap:10px;margin-top:15px;justify-content:flex-end}
+.modal-buttons button{padding:8px 16px;border-radius:6px;border:1px solid #333;background:#000;color:#fff;cursor:pointer}
+.modal-buttons button:hover{background:#222}
+.modal-buttons button.primary{background:#0f0;color:#000;border-color:#0f0}
+.modal-buttons button.primary:hover{background:#3f3}
+#strategyStatus{margin-left:8px;font-size:12px;color:#888}
+</style>
+</head>
+<body>
+
+<div id="bar">
+<select id="cat"><option>Loading...</option></select>
+<select id="sym"><option>Select symbol</option></select>
+<select id="tf"><option value="60">1m</option><option value="300">5m</option><option value="900">15m</option><option value="3600">1h</option></select>
+<select id="cnt"><option value="200">Last 200</option><option value="500">Last 500</option><option value="1000">Last 1K</option><option value="5000">Last 5K</option><option value="10000">Last 10K</option><option value="20000">Last 20K</option><option value="50000">Last 50K</option><option value="100000">Last 100K</option><option value="200000">Last 200K</option><option value="500000">Last 500K</option></select>
+<button id="loadH">Load Historical</button>
+<div class="date-group"><label>From:</label><input type="date" id="df" class="date-input" value=""><label>To:</label><input type="date" id="dt" class="date-input" value=""><button id="fetchR">Fetch Range</button></div>
+<button id="live">Live Stream</button><button id="csv">CSV</button><button id="xlsx">XLSX</button><button id="bt">⚙ Backtest</button>
+<div class="strategy-btn">
+<button id="strategyBtn">📊 Strategy</button><span id="strategyStatus"></span>
+<div id="strategyDropdown" class="strategy-dropdown">
+<button id="stratImmediate">Immediate Signal Test</button>
+<button id="stratRandom">Random Strategy</button>
+<button id="stratPaste">Paste Custom JS</button>
+<button id="stratUpload">Upload Strategy File</button>
+</div>
+</div>
+<button id="scrollStart">⏮</button><button id="scrollEnd">⏭</button>
+<span id="status" class="s-red">🔴 Disconnected</span>
+</div>
+
+<div id="info"><span id="infoTxt">Load data to begin</span><span id="pair">--</span></div>
+
+<div id="main">
+<div id="chart"></div>
+<div id="countdown">00:00</div>
+<div id="spinner"><div id="spinner-text">Loading...</div><div id="progress-bar"><div id="progress-fill"></div></div><div id="spinner-sub"></div></div>
+</div>
+
+<div id="drawer">
+<div id="drawer-content">
+<div class="section"><h3>Backtest Controls</h3>
+<div class="controls">
+<input type="number" id="slP" placeholder="SL %" step="0.1" style="width:100px;">
+<input type="number" id="tpP" placeholder="TP %" step="0.1" style="width:100px;">
+<input type="number" id="hold" placeholder="Hold candles" value="5" style="width:120px;">
+<button id="runBt">Run Backtest</button><button id="clr">Clear</button>
+</div>
+</div>
+<div class="section"><h3>Results</h3><div id="results">Run a backtest to see results</div></div>
+</div>
+</div>
+
+<div id="strategyModal">
+<div class="modal-content">
+<h3>Paste Custom Strategy JavaScript</h3>
+<textarea id="strategyCode" placeholder="// Paste your strategy function here
+// Example:
+// function customStrategy(data) {
+//   const signals = [];
+//   for (let i = 20; i < data.length; i++) {
+//     if (data[i].close > data[i].open) {
+//       signals.push({index: i, side: 'buy'});
+//     }
+//   }
+//   return signals;
+// }"></textarea>
+<div class="modal-buttons">
+<button id="modalCancel">Cancel</button>
+<button id="modalApply" class="primary">Apply Strategy</button>
+</div>
+</div>
+</div>
+
+<input type="file" id="strategyFileInput" accept=".js,.txt" style="display:none">
+
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<script>
+(function checkLibs(){if(typeof LightweightCharts==='undefined'||typeof XLSX==='undefined'){setTimeout(checkLibs,100);return}init()})();
+
+function init(){
+const APP_ID=1089,WS_URL=`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`,MAX=500000,BATCH=5000;
+let chart,series,socket,last=null,rangeStart=null,rangeEnd=null;
+window.data=[]; window.sym=''; window.gran=60; window.markers=[];
+let data=window.data, sym=window.sym, gran=window.gran, markers=window.markers;
+let currentStrategy=null,strategyInterval=null,customStrategyFunc=null,chartReady=false,countdownInterval=null;
+let lastProcessedIndex=-1;
+
+// Technical Indicators
+function calculateSMA(data, period) {
+  const sma = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      sma.push(null);
+    } else {
+      let sum = 0;
+      for (let j = 0; j < period; j++) {
+        sum += data[i - j].close;
+      }
+      sma.push(sum / period);
+    }
+  }
+  return sma;
+}
+
+function calculateEMA(data, period) {
+  const ema = [];
+  const multiplier = 2 / (period + 1);
+  let prevEMA = data[0].close;
+  
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      ema.push(data[i].close);
+    } else {
+      const currentEMA = (data[i].close - prevEMA) * multiplier + prevEMA;
+      ema.push(currentEMA);
+      prevEMA = currentEMA;
+    }
+  }
+  return ema;
+}
+
+function calculateRSI(data, period = 14) {
+  const rsi = [];
+  const gains = [];
+  const losses = [];
+  
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      rsi.push(null);
+      continue;
+    }
+    
+    const change = data[i].close - data[i - 1].close;
+    gains.push(change > 0 ? change : 0);
+    losses.push(change < 0 ? Math.abs(change) : 0);
+    
+    if (i < period) {
+      rsi.push(null);
+    } else {
+      const avgGain = gains.slice(-period).reduce((a, b) => a + b) / period;
+      const avgLoss = losses.slice(-period).reduce((a, b) => a + b) / period;
+      
+      if (avgLoss === 0) {
+        rsi.push(100);
+      } else {
+        const rs = avgGain / avgLoss;
+        rsi.push(100 - (100 / (1 + rs)));
+      }
+    }
+  }
+  return rsi;
+}
+
+function calculateMACD(data, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  const fastEMA = calculateEMA(data, fastPeriod);
+  const slowEMA = calculateEMA(data, slowPeriod);
+  
+  const macdLine = fastEMA.map((fast, i) => fast - slowEMA[i]);
+  
+  const macdData = macdLine.map((val, i) => ({ close: val || 0 }));
+  const signalLine = calculateEMA(macdData, signalPeriod);
+  
+  const histogram = macdLine.map((macd, i) => macd - signalLine[i]);
+  
+  return { macdLine, signalLine, histogram };
+}
+
+// Strategy: Immediate Signal Test (RSI + MA Crossover)
+function immediateSignalStrategy(data) {
+  const signals = [];
+  const sma20 = calculateSMA(data, 20);
+  const sma50 = calculateSMA(data, 50);
+  const rsi = calculateRSI(data, 14);
+  
+  for (let i = 50; i < data.length; i++) {
+    if (sma20[i] && sma50[i] && rsi[i]) {
+      // Buy signal: SMA20 crosses above SMA50 and RSI < 70
+      if (sma20[i] > sma50[i] && sma20[i - 1] <= sma50[i - 1] && rsi[i] < 70) {
+        signals.push({ time: data[i].time, position: 'belowBar', color: '#0f0', shape: 'arrowUp', text: 'BUY' });
+      }
+      // Sell signal: SMA20 crosses below SMA50 and RSI > 30
+      else if (sma20[i] < sma50[i] && sma20[i - 1] >= sma50[i - 1] && rsi[i] > 30) {
+        signals.push({ time: data[i].time, position: 'aboveBar', color: '#f33', shape: 'arrowDown', text: 'SELL' });
+      }
+    }
+  }
+  
+  return signals;
+}
+
+// Strategy: Random Strategy (Multiple Indicators) - Fixed to be deterministic
+function randomStrategy(data) {
+  const signals = [];
+  const ema12 = calculateEMA(data, 12);
+  const ema26 = calculateEMA(data, 26);
+  const rsi = calculateRSI(data, 14);
+  const macd = calculateMACD(data);
+  
+  for (let i = 30; i < data.length; i++) {
+    if (ema12[i] && ema26[i] && rsi[i] && macd.histogram[i]) {
+      // Buy signal: EMA12 > EMA26, RSI < 40, MACD histogram positive
+      if (ema12[i] > ema26[i] && rsi[i] < 40 && macd.histogram[i] > 0) {
+        signals.push({ time: data[i].time, position: 'belowBar', color: '#0f0', shape: 'arrowUp', text: 'BUY' });
+      }
+      // Sell signal: EMA12 < EMA26, RSI > 60, MACD histogram negative
+      else if (ema12[i] < ema26[i] && rsi[i] > 60 && macd.histogram[i] < 0) {
+        signals.push({ time: data[i].time, position: 'aboveBar', color: '#f33', shape: 'arrowDown', text: 'SELL' });
+      }
+      // Additional signals based on RSI extremes (deterministic - removed random)
+      else if (rsi[i] < 30 && macd.histogram[i] > 0) {
+        signals.push({ time: data[i].time, position: 'belowBar', color: '#0ff', shape: 'circle', text: 'R-BUY' });
+      }
+      else if (rsi[i] > 70 && macd.histogram[i] < 0) {
+        signals.push({ time: data[i].time, position: 'aboveBar', color: '#ff0', shape: 'circle', text: 'R-SELL' });
+      }
+    }
+  }
+  
+  return signals;
+}
+
+// Mark chart as ready for strategies
+function markChartReady() {
+  chartReady = true;
+  console.log('Chart marked as ready for strategy execution');
+  if (currentStrategy) {
+    applyCurrentStrategy();
+  }
+}
+
+// Apply current strategy to data - FIXED: Only recalculate all signals on initial load or full data change
+function applyCurrentStrategy() {
+  if (!chartReady || data.length === 0) return;
+  
+  let newMarkers = [];
+  
+  if (currentStrategy === 'immediate') {
+    newMarkers = immediateSignalStrategy(data);
+    updateStrategyStatus('Active: Immediate Signal Test');
+  } else if (currentStrategy === 'random') {
+    newMarkers = randomStrategy(data);
+    updateStrategyStatus('Active: Random Strategy');
+  } else if (currentStrategy === 'custom' && customStrategyFunc) {
+    try {
+      newMarkers = customStrategyFunc(data) || [];
+      updateStrategyStatus('Active: Custom Strategy');
+    } catch (err) {
+      console.error('Custom strategy error:', err);
+      updateStrategyStatus('Error in custom strategy');
+      return;
+    }
+  }
+  
+  markers = newMarkers;
+  series.setMarkers(markers);
+  lastProcessedIndex = data.length - 1;
+  console.log(`Applied ${currentStrategy} strategy: ${markers.length} signals generated`);
+}
+
+// Apply strategy for only new candles - FIXED: Incremental signal updates
+function applyStrategyIncremental() {
+  if (!chartReady || data.length === 0 || !currentStrategy) return;
+  
+  // Only process if we have new candles
+  if (lastProcessedIndex >= data.length - 1) return;
+  
+  // For live updates, recalculate signals for the last few candles to ensure accuracy
+  // but keep all previous signals intact
+  const lookbackCandles = 60; // Enough for indicators to stabilize
+  const startIndex = Math.max(0, data.length - lookbackCandles);
+  
+  // Remove markers from the recalculation range
+  const timeThreshold = data[startIndex].time;
+  const preservedMarkers = markers.filter(m => m.time < timeThreshold);
+  
+  let newMarkers = [];
+  const recalcData = data.slice(startIndex);
+  
+  if (currentStrategy === 'immediate') {
+    newMarkers = immediateSignalStrategy(recalcData);
+  } else if (currentStrategy === 'random') {
+    newMarkers = randomStrategy(recalcData);
+  } else if (currentStrategy === 'custom' && customStrategyFunc) {
+    try {
+      newMarkers = customStrategyFunc(recalcData) || [];
+    } catch (err) {
+      console.error('Custom strategy error:', err);
+      return;
+    }
+  }
+  
+  // Combine preserved and new markers
+  markers = [...preservedMarkers, ...newMarkers];
+  series.setMarkers(markers);
+  lastProcessedIndex = data.length - 1;
+}
+
+// Apply strategy
+function applyStrategy(strategyType) {
+  currentStrategy = strategyType;
+  lastProcessedIndex = -1;
+  
+  if (strategyInterval) {
+    clearInterval(strategyInterval);
+    strategyInterval = null;
+  }
+  
+  applyCurrentStrategy();
+  
+  // Start live signal monitoring - only update incrementally
+  strategyInterval = setInterval(() => {
+    if (chartReady && data.length > 0) {
+      applyStrategyIncremental();
+    }
+  }, 5000);
+}
+
+// Update strategy status display
+function updateStrategyStatus(status) {
+  document.getElementById('strategyStatus').textContent = status;
+}
+
+// Apply custom strategy from textarea
+function applyCustomStrategy() {
+  const code = document.getElementById('strategyCode').value.trim();
+  if (!code) {
+    alert('Please paste your strategy code');
+    return;
+  }
+  
+  try {
+    customStrategyFunc = new Function('data', code + '\n\nif (typeof customStrategy === "function") return customStrategy(data); else return [];');
+    currentStrategy = 'custom';
+    applyStrategy('custom');
+    document.getElementById('strategyModal').classList.remove('show');
+  } catch (err) {
+    alert('Error in strategy code: ' + err.message);
+    console.error(err);
+  }
+}
+
+// Handle strategy file upload
+function handleStrategyFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    const code = event.target.result;
+    document.getElementById('strategyCode').value = code;
+    document.getElementById('strategyModal').classList.add('show');
+  };
+  reader.readAsText(file);
+}
+
+// Init chart
+const container=document.getElementById('chart');
+chart=LightweightCharts.createChart(container,{width:container.clientWidth,height:container.clientHeight,layout:{background:{color:'#000'},textColor:'#fff'},grid:{vertLines:{color:'#222'},horzLines:{color:'#222'}},timeScale:{timeVisible:true,secondsVisible:false}});
+series=chart.addCandlestickSeries({upColor:'#0f0',downColor:'#f33',borderVisible:false,wickUpColor:'#0f0',wickDownColor:'#f33'});
+window.addEventListener('resize',()=>chart.applyOptions({width:container.clientWidth,height:container.clientHeight}));
+
+// Load symbols
+const catSel=document.getElementById('cat'),symSel=document.getElementById('sym');
+let symbolsData={},firstCandleDates={};
+catSel.innerHTML='<option>Loading markets...</option>';
+const ws=new WebSocket(WS_URL);
+ws.onopen=()=>ws.send(JSON.stringify({active_symbols:'brief',product_type:'basic'}));
+ws.onmessage=e=>{
+try{
+const d=JSON.parse(e.data);
+if(d.active_symbols&&Array.isArray(d.active_symbols)){
+const cats={};
+d.active_symbols.forEach(s=>{
+const c=s.market_display_name||s.market||'Other';
+if(!cats[c])cats[c]=[];
+cats[c].push(s);
+symbolsData[s.symbol]=s;
+});
+catSel.innerHTML='';Object.keys(cats).sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=`${c} (${cats[c].length})`;catSel.appendChild(o)});
+catSel.onchange=()=>{
+symSel.innerHTML='';
+const sc=catSel.value;
+(cats[sc]||[]).forEach(s=>{
+const o=document.createElement('option');
+o.value=s.symbol;
+let label=s.display_name;
+if(firstCandleDates[s.symbol]){
+label+=` (From: ${firstCandleDates[s.symbol]})`;
+}
+o.textContent=label;
+symSel.appendChild(o);
+});
+};
+symSel.onchange=fetchFirstCandle;
+catSel.onchange();ws.close();
+}else if(d.error){catSel.innerHTML='<option>Error: '+d.error.message+'</option>';ws.close()}
+}catch(err){console.error(err)}
+};
+ws.onerror=()=>{catSel.innerHTML='<option>Connection failed</option>';setTimeout(()=>{catSel.innerHTML='<option>Tap to retry</option>';catSel.onclick=()=>{catSel.onclick=null;location.reload()}},1000)};
+
+// Event listeners
+document.getElementById('loadH').onclick=loadHist;
+document.getElementById('fetchR').onclick=fetchRange;
+document.getElementById('live').onclick=startLive;
+document.getElementById('csv').onclick=exportCSV;
+document.getElementById('xlsx').onclick=exportXLSX;
+document.getElementById('bt').onclick=()=>document.getElementById('drawer').classList.toggle('open');
+document.getElementById('runBt').onclick=runBacktest;
+document.getElementById('clr').onclick=()=>{document.getElementById('results').textContent='Run a backtest to see results';markers=[];series.setMarkers([])};
+symSel.onchange=fetchFirstCandle;
+document.getElementById('scrollStart').onclick=()=>{if(data.length>0)chart.timeScale().scrollToPosition(-data.length,false)};
+document.getElementById('scrollEnd').onclick=()=>{if(data.length>0)chart.timeScale().scrollToRealTime()};
+document.getElementById('df').value='';
+document.getElementById('dt').value='';
+
+// Strategy event listeners
+document.getElementById('strategyBtn').onclick=()=>document.getElementById('strategyDropdown').classList.toggle('show');
+document.getElementById('stratImmediate').onclick=()=>{applyStrategy('immediate');document.getElementById('strategyDropdown').classList.remove('show')};
+document.getElementById('stratRandom').onclick=()=>{applyStrategy('random');document.getElementById('strategyDropdown').classList.remove('show')};
+document.getElementById('stratPaste').onclick=()=>{document.getElementById('strategyModal').classList.add('show');document.getElementById('strategyDropdown').classList.remove('show')};
+document.getElementById('stratUpload').onclick=()=>{document.getElementById('strategyFileInput').click();document.getElementById('strategyDropdown').classList.remove('show')};
+document.getElementById('modalCancel').onclick=()=>document.getElementById('strategyModal').classList.remove('show');
+document.getElementById('modalApply').onclick=applyCustomStrategy;
+document.getElementById('strategyFileInput').onchange=handleStrategyFileUpload;
+document.addEventListener('click',e=>{if(!e.target.closest('.strategy-btn'))document.getElementById('strategyDropdown').classList.remove('show')});
+
+// Fetch first available candle date
+function fetchFirstCandle(){
+const s=symSel.value;
+if(!s||s==='Select symbol'||firstCandleDates[s])return;
+const ws=new WebSocket(WS_URL);
+const veryOldDate=Math.floor(new Date('2000-01-01').getTime()/1000);
+ws.onopen=()=>ws.send(JSON.stringify({ticks_history:s,adjust_start_time:1,count:1,start:veryOldDate,granularity:60,style:'candles'}));
+ws.onmessage=e=>{
+try{
+const d=JSON.parse(e.data);
+if(d.candles&&d.candles.length>0){
+const ts=d.candles[0].epoch;
+const dt=new Date(ts*1000).toISOString().split('T')[0];
+firstCandleDates[s]=dt;
+const opt=Array.from(symSel.options).find(o=>o.value===s);
+if(opt)opt.textContent=symbolsData[s].display_name+` (From: ${dt})`;
+}
+ws.close();
+}catch(err){console.error(err);ws.close()}
+};
+ws.onerror=()=>ws.close();
+}
+
+// Render data
+function render(){
+if(data.length===0)return;
+try{
+const validData=data.filter(c=>c&&c.time&&!isNaN(c.open)&&!isNaN(c.high)&&!isNaN(c.low)&&!isNaN(c.close));
+if(validData.length===0){
+console.error('No valid candle data to render');
+hideSpinner();
+return;
+}
+series.setData(validData);
+document.getElementById('pair').textContent=`${sym} | ${gran}s | ${validData.length} candles`;
+document.getElementById('infoTxt').textContent=`Loaded ${validData.length} candles`;
+chart.timeScale().fitContent();
+markChartReady();
+}catch(err){
+console.error('Error rendering chart:',err);
+hideSpinner();
+alert('Error displaying chart data. Please try again.');
+}
+}
+
+// Show/hide spinner
+function showSpinner(txt,sub=''){document.getElementById('spinner').style.display='block';document.getElementById('spinner-text').textContent=txt;document.getElementById('spinner-sub').textContent=sub;document.getElementById('progress-fill').style.width='0%'}
+function hideSpinner(){document.getElementById('spinner').style.display='none'}
+function updateProgress(pct){document.getElementById('progress-fill').style.width=pct+'%'}
+function formatDate(ts){const d=new Date(ts*1000);return d.toLocaleDateString('en-GB')}
+function calculateDays(start,end){return Math.ceil((end-start)/86400)}
+
+// Load historical data - FIXED: Continue loading even if batch is not exactly BATCH size
+function loadHist(){
+const s=symSel.value;
+if(!s||s==='Select symbol'){alert('Select a symbol');return}
+sym=s;gran=parseInt(document.getElementById('tf').value);
+const cnt=parseInt(document.getElementById('cnt').value);
+data=[];markers=[];series.setMarkers([]);lastProcessedIndex=-1;
+const estimatedDays=Math.ceil((cnt*gran)/86400);
+showSpinner(`Preparing to load ${cnt.toLocaleString()} candles (~${estimatedDays} days)...`,'Initializing connection...');
+chartReady=false;
+const ws=new WebSocket(WS_URL);
+let startTime=null;
+ws.onopen=()=>{
+const end=Math.floor(Date.now()/1000);
+ws.send(JSON.stringify({ticks_history:sym,adjust_start_time:1,count:Math.min(cnt,BATCH),end:end,granularity:gran,style:'candles'}));
+};
+let totalReceived=0;
+ws.onmessage=e=>{
+try{
+const d=JSON.parse(e.data);
+if(d.candles&&d.candles.length>0){
+const candles=d.candles.map(c=>({time:c.epoch,open:parseFloat(c.open),high:parseFloat(c.high),low:parseFloat(c.low),close:parseFloat(c.close)})).filter(c=>c&&c.time&&!isNaN(c.open)&&!isNaN(c.high)&&!isNaN(c.low)&&!isNaN(c.close));
+if(candles.length>0){
+data.push(...candles);
+totalReceived+=candles.length;
+if(startTime===null)startTime=candles[candles.length-1].time;
+const endTime=candles[0].time;
+const days=calculateDays(endTime,startTime);
+const dateRange=`${formatDate(endTime)} to ${formatDate(startTime)} (${days} days)`;
+updateProgress((totalReceived/cnt)*100);
+showSpinner(`Loading ${cnt.toLocaleString()} candles...`,`Fetched ${totalReceived.toLocaleString()} of ${cnt.toLocaleString()} | ${dateRange}`);
+if(totalReceived<cnt&&candles.length>0){
+const nextEnd=candles[0].time-1;
+ws.send(JSON.stringify({ticks_history:sym,adjust_start_time:1,count:Math.min(cnt-totalReceived,BATCH),end:nextEnd,granularity:gran,style:'candles'}));
+}else{
+data.sort((a,b)=>a.time-b.time);
+render();
+hideSpinner();
+ws.close();
+}
+}else{
+data.sort((a,b)=>a.time-b.time);
+render();
+hideSpinner();
+ws.close();
+}
+}else if(d.error){alert('Error: '+d.error.message);hideSpinner();ws.close()}
+}catch(err){console.error('Error processing candles:',err);hideSpinner();ws.close()}
+};
+ws.onerror=()=>{alert('Connection failed');hideSpinner()};
+}
+
+// Fetch date range - FIXED: Continue loading even if batch is not exactly BATCH size
+function fetchRange(){
+const s=symSel.value;
+if(!s||s==='Select symbol'){alert('Select a symbol');return}
+const fromDate=document.getElementById('df').value;
+const toDate=document.getElementById('dt').value;
+if(!fromDate||!toDate){alert('Select both dates');return}
+sym=s;gran=parseInt(document.getElementById('tf').value);
+const start=Math.floor(new Date(fromDate).getTime()/1000);
+const end=Math.floor(new Date(toDate).getTime()/1000)+86399;
+if(start>=end){alert('From date must be before To date');return}
+const estimatedCount=Math.floor((end-start)/gran);
+const totalDays=calculateDays(start,end);
+if(estimatedCount>MAX){alert(`Too many candles (~${estimatedCount.toLocaleString()}). Max is ${MAX.toLocaleString()}`);return}
+data=[];markers=[];series.setMarkers([]);lastProcessedIndex=-1;
+showSpinner(`Preparing to fetch ~${estimatedCount.toLocaleString()} candles...`,`Date range: ${formatDate(start)} to ${formatDate(end)} (${totalDays} days)`);
+chartReady=false;
+rangeStart=start;
+rangeEnd=end;
+const ws=new WebSocket(WS_URL);
+let currentEnd=end;
+let totalReceived=0;
+ws.onopen=()=>{
+ws.send(JSON.stringify({ticks_history:sym,adjust_start_time:1,start:start,end:currentEnd,granularity:gran,style:'candles'}));
+};
+ws.onmessage=e=>{
+try{
+const d=JSON.parse(e.data);
+if(d.candles&&d.candles.length>0){
+const candles=d.candles.map(c=>({time:c.epoch,open:parseFloat(c.open),high:parseFloat(c.high),low:parseFloat(c.low),close:parseFloat(c.close)})).filter(c=>c&&c.time&&!isNaN(c.open)&&!isNaN(c.high)&&!isNaN(c.low)&&!isNaN(c.close));
+if(candles.length>0){
+data.push(...candles);
+totalReceived+=candles.length;
+const progress=Math.min(100,(totalReceived/estimatedCount)*100);
+updateProgress(progress);
+const currentStart=candles[0].time;
+const currentDays=calculateDays(currentStart,end);
+showSpinner(`Fetching ${estimatedCount.toLocaleString()} candles...`,`Fetched ${totalReceived.toLocaleString()} of ${estimatedCount.toLocaleString()} | ${formatDate(currentStart)} to ${formatDate(end)} (${currentDays} days)`);
+if(candles[0].time>start){
+currentEnd=candles[0].time-1;
+ws.send(JSON.stringify({ticks_history:sym,adjust_start_time:1,start:start,end:currentEnd,granularity:gran,style:'candles'}));
+}else{
+const uniqueData=new Map();
+data.forEach(c=>uniqueData.set(c.time,c));
+data=Array.from(uniqueData.values()).sort((a,b)=>a.time-b.time);
+render();
+hideSpinner();
+ws.close();
+}
+}else{
+const uniqueData=new Map();
+data.forEach(c=>uniqueData.set(c.time,c));
+data=Array.from(uniqueData.values()).sort((a,b)=>a.time-b.time);
+render();
+hideSpinner();
+ws.close();
+}
+}else if(d.error){alert('Error: '+d.error.message);hideSpinner();ws.close()}
+}catch(err){console.error('Error processing candles:',err);hideSpinner();ws.close()}
+};
+ws.onerror=()=>{alert('Connection failed');hideSpinner()};
+}
+
+// Start live stream - FIXED: Normalize candle time to prevent duplicates
+function startLive(){
+if(!sym){alert('Load historical data first');return}
+if(socket){socket.close();socket=null}
+socket=new WebSocket(WS_URL);
+socket.onopen=()=>{
+socket.send(JSON.stringify({ticks_history:sym,adjust_start_time:1,count:1,end:'latest',granularity:gran,style:'candles',subscribe:1}));
+document.getElementById('status').className='s-yellow';
+document.getElementById('status').textContent='🟡 Connecting...';
+};
+socket.onmessage=e=>{
+try{
+const d=JSON.parse(e.data);
+if(d.ohlc){
+// FIXED: Normalize the epoch time to the candle period boundary
+const rawEpoch = d.ohlc.epoch;
+const normalizedTime = Math.floor(rawEpoch / gran) * gran;
+const c={time:normalizedTime,open:parseFloat(d.ohlc.open),high:parseFloat(d.ohlc.high),low:parseFloat(d.ohlc.low),close:parseFloat(d.ohlc.close)};
+const idx=data.findIndex(x=>x.time===c.time);
+if(idx>=0){
+// Update existing candle
+data[idx]=c;
+}else{
+// Add new candle
+data.push(c);
+}
+if(c&&c.time&&!isNaN(c.open)&&!isNaN(c.high)&&!isNaN(c.low)&&!isNaN(c.close)){series.update(c)}
+last=c;
+document.getElementById('status').className='s-green';
+document.getElementById('status').textContent='🟢 Live';
+updateCountdown(normalizedTime);
+}else if(d.error){console.error(d.error);document.getElementById('status').className='s-red';document.getElementById('status').textContent='🔴 Error'}
+}catch(err){console.error(err)}
+};
+socket.onerror=()=>{document.getElementById('status').className='s-red';document.getElementById('status').textContent='🔴 Disconnected'};
+socket.onclose=()=>{document.getElementById('status').className='s-red';document.getElementById('status').textContent='🔴 Disconnected'};
+}
+
+// Update countdown
+function updateCountdown(epoch){
+if(countdownInterval){
+clearInterval(countdownInterval);
+countdownInterval=null;
+}
+const next=epoch+gran;
+const cd=document.getElementById('countdown');
+countdownInterval=setInterval(()=>{
+const now=Math.floor(Date.now()/1000);
+const left=next-now;
+if(left>0){
+const m=Math.floor(left/60);
+const s=left%60;
+cd.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}else{cd.textContent='00:00'}
+},1000);
+}
+
+// Export CSV
+function exportCSV(){
+if(data.length===0){alert('No data');return}
+let csv='Time,Open,High,Low,Close\n';
+data.forEach(c=>{
+const dt=new Date(c.time*1000).toISOString();
+csv+=`${dt},${c.open},${c.high},${c.low},${c.close}\n`;
+});
+const blob=new Blob([csv],{type:'text/csv'});
+const url=URL.createObjectURL(blob);
+const a=document.createElement('a');
+a.href=url;
+a.download=`${sym}_${gran}s.csv`;
+a.click();
+}
+
+// Export XLSX
+function exportXLSX(){
+if(data.length===0){alert('No data');return}
+const rows=[['Time','Open','High','Low','Close']];
+data.forEach(c=>{
+const dt=new Date(c.time*1000).toISOString();
+rows.push([dt,c.open,c.high,c.low,c.close]);
+});
+const ws=XLSX.utils.aoa_to_sheet(rows);
+const wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,ws,'Data');
+XLSX.writeFile(wb,`${sym}_${gran}s.xlsx`);
+}
+
+// Run backtest
+function runBacktest(){
+if(data.length===0){alert('Load data first');return}
+const slP=parseFloat(document.getElementById('slP').value)||null;
+const tpP=parseFloat(document.getElementById('tpP').value)||null;
+const hold=parseInt(document.getElementById('hold').value)||5;
+if(!slP&&!tpP){alert('Enter SL% or TP%');return}
+markers=[];
+let wins=0,losses=0,totalPnL=0;
+for(let i=50;i<data.length-hold;i++){
+const sma20=data.slice(Math.max(0,i-19),i+1).reduce((a,b)=>a+b.close,0)/Math.min(20,i+1);
+const sma50=data.slice(Math.max(0,i-49),i+1).reduce((a,b)=>a+b.close,0)/Math.min(50,i+1);
+const prevSma20=data.slice(Math.max(0,i-20),i).reduce((a,b)=>a+b.close,0)/Math.min(20,i);
+const prevSma50=data.slice(Math.max(0,i-50),i).reduce((a,b)=>a+b.close,0)/Math.min(50,i);
+let side=null;
+if(sma20>sma50&&prevSma20<=prevSma50)side='buy';
+else if(sma20<sma50&&prevSma20>=prevSma50)side='sell';
+if(!side)continue;
+const entry=data[i].close;
+let exit=null,outcome=null;
+for(let j=i+1;j<=Math.min(i+hold,data.length-1);j++){
+const c=data[j];
+if(side==='buy'){
+if(slP&&((entry-c.low)/entry*100)>=slP){exit=entry*(1-slP/100);outcome='loss';break}
+if(tpP&&((c.high-entry)/entry*100)>=tpP){exit=entry*(1+tpP/100);outcome='win';break}
+}else{
+if(slP&&((c.high-entry)/entry*100)>=slP){exit=entry*(1+slP/100);outcome='loss';break}
+if(tpP&&((entry-c.low)/entry*100)>=tpP){exit=entry*(1-tpP/100);outcome='win';break}
+}
+if(j===Math.min(i+hold,data.length-1)){exit=c.close;outcome='hold'}
+}
+if(!exit)continue;
+const pnl=side==='buy'?(exit-entry)/entry*100:(entry-exit)/entry*100;
+totalPnL+=pnl;
+if(outcome==='win')wins++;else if(outcome==='loss')losses++;
+markers.push({time:data[i].time,position:side==='buy'?'belowBar':'aboveBar',color:outcome==='win'?'#0f0':outcome==='loss'?'#f33':'#ff0',shape:side==='buy'?'arrowUp':'arrowDown',text:outcome==='win'?'W':outcome==='loss'?'L':'H'});
+}
+series.setMarkers(markers);
+const total=wins+losses;
+const winRate=total>0?(wins/total*100).toFixed(1):0;
+document.getElementById('results').innerHTML=`<strong>Backtest Results</strong><br>Trades: ${total}<br>Wins: ${wins} | Losses: ${losses}<br>Win Rate: ${winRate}%<br>Total P&L: ${totalPnL.toFixed(2)}%`;
+}
+}
+</script>
+<!-- ========================================================================== -->
+<!-- COPY THIS ENTIRE SECTION AND PASTE AT THE BOTTOM OF YOUR HTML FILE     -->
+<!-- Place it right before the closing </body> tag                          -->
+<!-- ========================================================================== -->
+
+<script>
+// ============================================================================
+// TECHNICAL INDICATORS LIBRARY - 173+ INDICATORS FOR CSV EXPORT
+// ============================================================================
+
+// Helper function to safely convert values (preserves zeros!)
+function safeValue(val) {
+  if (val === null || val === undefined || isNaN(val)) return '';
+  return val;
+}
+
+// Moving Averages - SMA
+function calculateSMA(data, period, priceType = 'close') {
+  const sma = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      sma.push(null);
+    } else {
+      let sum = 0;
+      for (let j = 0; j < period; j++) {
+        sum += data[i - j][priceType];
+      }
+      sma.push(sum / period);
+    }
+  }
+  return sma;
+}
+
+// Moving Averages - EMA
+function calculateEMA(data, period, priceType = 'close') {
+  const ema = [];
+  const multiplier = 2 / (period + 1);
+  let prevEMA = data[0][priceType];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      ema.push(data[i][priceType]);
+    } else {
+      const currentEMA = (data[i][priceType] - prevEMA) * multiplier + prevEMA;
+      ema.push(currentEMA);
+      prevEMA = currentEMA;
+    }
+  }
+  return ema;
+}
+
+// RSI Calculation
+function calculateRSI(data, period = 14) {
+  const rsi = [];
+  const gains = [];
+  const losses = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      rsi.push(null);
+      continue;
+    }
+
+    const change = data[i].close - data[i - 1].close;
+    gains.push(change > 0 ? change : 0);
+    losses.push(change < 0 ? Math.abs(change) : 0);
+
+    if (i < period) {
+      rsi.push(null);
+    } else {
+      const avgGain = gains.slice(-period).reduce((a, b) => a + b) / period;
+      const avgLoss = losses.slice(-period).reduce((a, b) => a + b) / period;
+
+      if (avgLoss === 0) {
+        rsi.push(100);
+      } else {
+        const rs = avgGain / avgLoss;
+        rsi.push(100 - (100 / (1 + rs)));
+      }
+    }
+  }
+  return rsi;
+}
+
+// MACD Calculation
+function calculateMACD(data, fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  const fastEMA = calculateEMA(data, fastPeriod);
+  const slowEMA = calculateEMA(data, slowPeriod);
+
+  const macdLine = fastEMA.map((fast, i) => fast - slowEMA[i]);
+
+  const macdData = macdLine.map((val, i) => ({ close: val || 0 }));
+  const signalLine = calculateEMA(macdData, signalPeriod);
+
+  const histogram = macdLine.map((macd, i) => macd - signalLine[i]);
+
+  return { macdLine, signalLine, histogram };
+}
+
+// Bollinger Bands
+function calculateBollingerBands(data, period = 20, stdDev = 2) {
+  const sma = calculateSMA(data, period);
+  const upper = [];
+  const middle = [];
+  const lower = [];
+  const bandwidth = [];
+  const percentB = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      upper.push(null);
+      middle.push(null);
+      lower.push(null);
+      bandwidth.push(null);
+      percentB.push(null);
+    } else {
+      let sum = 0;
+      for (let j = 0; j < period; j++) {
+        sum += Math.pow(data[i - j].close - sma[i], 2);
+      }
+      const std = Math.sqrt(sum / period);
+      
+      upper.push(sma[i] + stdDev * std);
+      middle.push(sma[i]);
+      lower.push(sma[i] - stdDev * std);
+      
+      const bw = (upper[i] - lower[i]) / middle[i] * 100;
+      bandwidth.push(bw);
+      
+      const pb = (data[i].close - lower[i]) / (upper[i] - lower[i]);
+      percentB.push(pb);
+    }
+  }
+  return { upper, middle, lower, bandwidth, percentB };
+}
+
+// ATR (Average True Range)
+function calculateATR(data, period = 14) {
+  const tr = [];
+  const atr = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      tr.push(data[i].high - data[i].low);
+    } else {
+      const hl = data[i].high - data[i].low;
+      const hc = Math.abs(data[i].high - data[i - 1].close);
+      const lc = Math.abs(data[i].low - data[i - 1].close);
+      tr.push(Math.max(hl, hc, lc));
+    }
+
+    if (i < period - 1) {
+      atr.push(null);
+    } else if (i === period - 1) {
+      atr.push(tr.slice(0, period).reduce((a, b) => a + b) / period);
+    } else {
+      atr.push((atr[i - 1] * (period - 1) + tr[i]) / period);
+    }
+  }
+  return atr;
+}
+
+// Stochastic Oscillator
+function calculateStochastic(data, kPeriod = 14, dPeriod = 3) {
+  const k = [];
+  const d = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < kPeriod - 1) {
+      k.push(null);
+      d.push(null);
+    } else {
+      let highestHigh = -Infinity;
+      let lowestLow = Infinity;
+      
+      for (let j = 0; j < kPeriod; j++) {
+        highestHigh = Math.max(highestHigh, data[i - j].high);
+        lowestLow = Math.min(lowestLow, data[i - j].low);
+      }
+
+      const kValue = highestHigh === lowestLow ? 50 : ((data[i].close - lowestLow) / (highestHigh - lowestLow)) * 100;
+      k.push(kValue);
+
+      if (i < kPeriod + dPeriod - 2) {
+        d.push(null);
+      } else {
+        const dValue = k.slice(i - dPeriod + 1, i + 1).reduce((a, b) => a + b) / dPeriod;
+        d.push(dValue);
+      }
+    }
+  }
+  return { k, d };
+}
+
+// CCI (Commodity Channel Index)
+function calculateCCI(data, period = 20) {
+  const cci = [];
+  const tp = data.map(d => (d.high + d.low + d.close) / 3);
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      cci.push(null);
+    } else {
+      const sma = tp.slice(i - period + 1, i + 1).reduce((a, b) => a + b) / period;
+      const md = tp.slice(i - period + 1, i + 1).map(p => Math.abs(p - sma)).reduce((a, b) => a + b) / period;
+      cci.push(md === 0 ? 0 : (tp[i] - sma) / (0.015 * md));
+    }
+  }
+  return cci;
+}
+
+// Williams %R
+function calculateWilliamsR(data, period = 14) {
+  const wr = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      wr.push(null);
+    } else {
+      let highestHigh = -Infinity;
+      let lowestLow = Infinity;
+      
+      for (let j = 0; j < period; j++) {
+        highestHigh = Math.max(highestHigh, data[i - j].high);
+        lowestLow = Math.min(lowestLow, data[i - j].low);
+      }
+
+      const wrValue = highestHigh === lowestLow ? -50 : ((highestHigh - data[i].close) / (highestHigh - lowestLow)) * -100;
+      wr.push(wrValue);
+    }
+  }
+  return wr;
+}
+
+// ROC (Rate of Change)
+function calculateROC(data, period = 12) {
+  const roc = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period) {
+      roc.push(null);
+    } else {
+      const rocValue = data[i - period].close === 0 ? 0 : ((data[i].close - data[i - period].close) / data[i - period].close) * 100;
+      roc.push(rocValue);
+    }
+  }
+  return roc;
+}
+
+// OBV (On Balance Volume)
+function calculateOBV(data) {
+  const obv = [0];
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i].close > data[i - 1].close) {
+      obv.push(obv[i - 1] + (data[i].volume || 0));
+    } else if (data[i].close < data[i - 1].close) {
+      obv.push(obv[i - 1] - (data[i].volume || 0));
+    } else {
+      obv.push(obv[i - 1]);
+    }
+  }
+  return obv;
+}
+
+// ADX (Average Directional Index)
+function calculateADX(data, period = 14) {
+  const tr = [];
+  const plusDM = [];
+  const minusDM = [];
+  const atr = [];
+  const plusDI = [];
+  const minusDI = [];
+  const dx = [];
+  const adx = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      tr.push(data[i].high - data[i].low);
+      plusDM.push(0);
+      minusDM.push(0);
+    } else {
+      const hl = data[i].high - data[i].low;
+      const hc = Math.abs(data[i].high - data[i - 1].close);
+      const lc = Math.abs(data[i].low - data[i - 1].close);
+      tr.push(Math.max(hl, hc, lc));
+
+      const highDiff = data[i].high - data[i - 1].high;
+      const lowDiff = data[i - 1].low - data[i].low;
+
+      plusDM.push((highDiff > lowDiff && highDiff > 0) ? highDiff : 0);
+      minusDM.push((lowDiff > highDiff && lowDiff > 0) ? lowDiff : 0);
+    }
+
+    if (i < period - 1) {
+      atr.push(null);
+      plusDI.push(null);
+      minusDI.push(null);
+      dx.push(null);
+      adx.push(null);
+    } else if (i === period - 1) {
+      const atrVal = tr.slice(0, period).reduce((a, b) => a + b) / period;
+      const plusDMAvg = plusDM.slice(0, period).reduce((a, b) => a + b) / period;
+      const minusDMAvg = minusDM.slice(0, period).reduce((a, b) => a + b) / period;
+
+      atr.push(atrVal);
+      plusDI.push(atrVal === 0 ? 0 : (plusDMAvg / atrVal) * 100);
+      minusDI.push(atrVal === 0 ? 0 : (minusDMAvg / atrVal) * 100);
+
+      const dxVal = (plusDI[i] + minusDI[i]) === 0 ? 0 : (Math.abs(plusDI[i] - minusDI[i]) / (plusDI[i] + minusDI[i])) * 100;
+      dx.push(dxVal);
+      adx.push(null);
+    } else {
+      const atrVal = (atr[i - 1] * (period - 1) + tr[i]) / period;
+      const plusDMSmooth = (plusDM.slice(i - period + 1, i + 1).reduce((a, b) => a + b));
+      const minusDMSmooth = (minusDM.slice(i - period + 1, i + 1).reduce((a, b) => a + b));
+
+      atr.push(atrVal);
+      plusDI.push(atrVal === 0 ? 0 : (plusDMSmooth / period / atrVal) * 100);
+      minusDI.push(atrVal === 0 ? 0 : (minusDMSmooth / period / atrVal) * 100);
+
+      const dxVal = (plusDI[i] + minusDI[i]) === 0 ? 0 : (Math.abs(plusDI[i] - minusDI[i]) / (plusDI[i] + minusDI[i])) * 100;
+      dx.push(dxVal);
+
+      if (i < period * 2 - 2) {
+        adx.push(null);
+      } else if (i === period * 2 - 2) {
+        adx.push(dx.slice(period - 1, period * 2 - 1).reduce((a, b) => a + b) / period);
+      } else {
+        adx.push((adx[i - 1] * (period - 1) + dx[i]) / period);
+      }
+    }
+  }
+
+  return { adx, plusDI, minusDI };
+}
+
+// Parabolic SAR
+function calculateParabolicSAR(data, afStart = 0.02, afIncrement = 0.02, afMax = 0.2) {
+  const sar = [];
+  const trend = [];
+
+  let isUpTrend = true;
+  let sar_val = data[0].low;
+  let ep = data[0].high;
+  let af = afStart;
+
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      sar.push(sar_val);
+      trend.push(1);
+      continue;
+    }
+
+    sar_val = sar_val + af * (ep - sar_val);
+
+    if (isUpTrend) {
+      if (data[i].low < sar_val) {
+        isUpTrend = false;
+        sar_val = ep;
+        ep = data[i].low;
+        af = afStart;
+      } else {
+        if (data[i].high > ep) {
+          ep = data[i].high;
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    } else {
+      if (data[i].high > sar_val) {
+        isUpTrend = true;
+        sar_val = ep;
+        ep = data[i].high;
+        af = afStart;
+      } else {
+        if (data[i].low < ep) {
+          ep = data[i].low;
+          af = Math.min(af + afIncrement, afMax);
+        }
+      }
+    }
+
+    sar.push(sar_val);
+    trend.push(isUpTrend ? 1 : -1);
+  }
+
+  return { sar, trend };
+}
+
+// Aroon Indicator
+function calculateAroon(data, period = 25) {
+  const aroonUp = [];
+  const aroonDown = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      aroonUp.push(null);
+      aroonDown.push(null);
+    } else {
+      let highestIdx = i;
+      let lowestIdx = i;
+
+      for (let j = i - period + 1; j <= i; j++) {
+        if (data[j].high >= data[highestIdx].high) highestIdx = j;
+        if (data[j].low <= data[lowestIdx].low) lowestIdx = j;
+      }
+
+      aroonUp.push(((period - (i - highestIdx)) / period) * 100);
+      aroonDown.push(((period - (i - lowestIdx)) / period) * 100);
+    }
+  }
+
+  return { aroonUp, aroonDown };
+}
+
+// Support and Resistance Levels
+function calculateSupportResistance(data, lookback = 20) {
+  const support = [];
+  const resistance = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < lookback) {
+      support.push(null);
+      resistance.push(null);
+    } else {
+      let minLow = Infinity;
+      let maxHigh = -Infinity;
+
+      for (let j = i - lookback; j < i; j++) {
+        minLow = Math.min(minLow, data[j].low);
+        maxHigh = Math.max(maxHigh, data[j].high);
+      }
+
+      support.push(minLow);
+      resistance.push(maxHigh);
+    }
+  }
+
+  return { support, resistance };
+}
+
+// Pivot Points
+function calculatePivotPoints(data) {
+  const pivot = [];
+  const r1 = [];
+  const r2 = [];
+  const r3 = [];
+  const s1 = [];
+  const s2 = [];
+  const s3 = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      pivot.push(null);
+      r1.push(null);
+      r2.push(null);
+      r3.push(null);
+      s1.push(null);
+      s2.push(null);
+      s3.push(null);
+    } else {
+      const p = (data[i - 1].high + data[i - 1].low + data[i - 1].close) / 3;
+      pivot.push(p);
+      r1.push(2 * p - data[i - 1].low);
+      r2.push(p + (data[i - 1].high - data[i - 1].low));
+      r3.push(data[i - 1].high + 2 * (p - data[i - 1].low));
+      s1.push(2 * p - data[i - 1].high);
+      s2.push(p - (data[i - 1].high - data[i - 1].low));
+      s3.push(data[i - 1].low - 2 * (data[i - 1].high - p));
+    }
+  }
+
+  return { pivot, r1, r2, r3, s1, s2, s3 };
+}
+
+// Linear Regression
+function calculateLinearRegression(data, period = 20) {
+  const slope = [];
+  const intercept = [];
+  const rSquared = [];
+  const forecast = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      slope.push(null);
+      intercept.push(null);
+      rSquared.push(null);
+      forecast.push(null);
+    } else {
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumXX = 0;
+
+      for (let j = 0; j < period; j++) {
+        const x = j;
+        const y = data[i - period + 1 + j].close;
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumXX += x * x;
+      }
+
+      const slopeVal = (period * sumXY - sumX * sumY) / (period * sumXX - sumX * sumX);
+      const interceptVal = (sumY - slopeVal * sumX) / period;
+
+      slope.push(slopeVal);
+      intercept.push(interceptVal);
+      forecast.push(slopeVal * (period - 1) + interceptVal);
+
+      let sumSquaredErrors = 0;
+      let sumSquaredTotal = 0;
+      const meanY = sumY / period;
+
+      for (let j = 0; j < period; j++) {
+        const x = j;
+        const y = data[i - period + 1 + j].close;
+        const predicted = slopeVal * x + interceptVal;
+        sumSquaredErrors += Math.pow(y - predicted, 2);
+        sumSquaredTotal += Math.pow(y - meanY, 2);
+      }
+
+      const r2 = sumSquaredTotal === 0 ? 0 : 1 - (sumSquaredErrors / sumSquaredTotal);
+      rSquared.push(r2);
+    }
+  }
+
+  return { slope, intercept, rSquared, forecast };
+}
+
+// Fibonacci Retracement Levels
+function calculateFibonacci(data, lookback = 50) {
+  const fib236 = [];
+  const fib382 = [];
+  const fib500 = [];
+  const fib618 = [];
+  const fib786 = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < lookback) {
+      fib236.push(null);
+      fib382.push(null);
+      fib500.push(null);
+      fib618.push(null);
+      fib786.push(null);
+    } else {
+      let maxHigh = -Infinity;
+      let minLow = Infinity;
+
+      for (let j = i - lookback; j < i; j++) {
+        maxHigh = Math.max(maxHigh, data[j].high);
+        minLow = Math.min(minLow, data[j].low);
+      }
+
+      const diff = maxHigh - minLow;
+      fib236.push(maxHigh - diff * 0.236);
+      fib382.push(maxHigh - diff * 0.382);
+      fib500.push(maxHigh - diff * 0.500);
+      fib618.push(maxHigh - diff * 0.618);
+      fib786.push(maxHigh - diff * 0.786);
+    }
+  }
+
+  return { fib236, fib382, fib500, fib618, fib786 };
+}
+
+// Standard Deviation
+function calculateStdDev(data, period = 20) {
+  const stdDev = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      stdDev.push(null);
+    } else {
+      const prices = [];
+      for (let j = 0; j < period; j++) {
+        prices.push(data[i - j].close);
+      }
+      const mean = prices.reduce((a, b) => a + b) / period;
+      const variance = prices.reduce((sum, price) => sum + Math.pow(price - mean, 2), 0) / period;
+      stdDev.push(Math.sqrt(variance));
+    }
+  }
+
+  return stdDev;
+}
+
+// VWAP (Volume Weighted Average Price)
+function calculateVWAP(data) {
+  const vwap = [];
+  let cumulativeTPV = 0;
+  let cumulativeVolume = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const tp = (data[i].high + data[i].low + data[i].close) / 3;
+    const volume = data[i].volume || 1;
+    cumulativeTPV += tp * volume;
+    cumulativeVolume += volume;
+    vwap.push(cumulativeVolume === 0 ? tp : cumulativeTPV / cumulativeVolume);
+  }
+
+  return vwap;
+}
+
+// MFI (Money Flow Index)
+function calculateMFI(data, period = 14) {
+  const mfi = [];
+  const mf = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const tp = (data[i].high + data[i].low + data[i].close) / 3;
+    const volume = data[i].volume || 1;
+    mf.push(tp * volume);
+
+    if (i < period) {
+      mfi.push(null);
+    } else {
+      let positiveFlow = 0;
+      let negativeFlow = 0;
+
+      for (let j = i - period + 1; j <= i; j++) {
+        if (j > 0) {
+          const tpCurr = (data[j].high + data[j].low + data[j].close) / 3;
+          const tpPrev = (data[j - 1].high + data[j - 1].low + data[j - 1].close) / 3;
+          
+          if (tpCurr > tpPrev) {
+            positiveFlow += mf[j];
+          } else if (tpCurr < tpPrev) {
+            negativeFlow += mf[j];
+          }
+        }
+      }
+
+      const mfiValue = negativeFlow === 0 ? 100 : 100 - (100 / (1 + (positiveFlow / negativeFlow)));
+      mfi.push(mfiValue);
+    }
+  }
+
+  return mfi;
+}
+
+// Pattern Recognition
+function calculatePatterns(data) {
+  const higherHigh = [];
+  const lowerLow = [];
+  const trendDirection = [];
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < 2) {
+      higherHigh.push(0);
+      lowerLow.push(0);
+      trendDirection.push(0);
+    } else {
+      higherHigh.push(data[i].high > data[i - 1].high && data[i - 1].high > data[i - 2].high ? 1 : 0);
+      lowerLow.push(data[i].low < data[i - 1].low && data[i - 1].low < data[i - 2].low ? 1 : 0);
+
+      if (data[i].close > data[i - 1].close && data[i - 1].close > data[i - 2].close) {
+        trendDirection.push(1);
+      } else if (data[i].close < data[i - 1].close && data[i - 1].close < data[i - 2].close) {
+        trendDirection.push(-1);
+      } else {
+        trendDirection.push(0);
+      }
+    }
+  }
+
+  return { higherHigh, lowerLow, trendDirection };
+}
+
+// ============================================================================
+// MASTER FUNCTION: Calculate All 173 Indicators
+// ============================================================================
+function calculateAllIndicators(data) {
+  console.log('Calculating 173+ indicators for CSV export...');
+  
+  const indicators = {};
+
+  // Moving Averages - SMA (Close)
+  indicators.SMA_3 = calculateSMA(data, 3);
+  indicators.SMA_5 = calculateSMA(data, 5);
+  indicators.SMA_8 = calculateSMA(data, 8);
+  indicators.SMA_10 = calculateSMA(data, 10);
+  indicators.SMA_15 = calculateSMA(data, 15);
+  indicators.SMA_20 = calculateSMA(data, 20);
+  indicators.SMA_21 = calculateSMA(data, 21);
+  indicators.SMA_30 = calculateSMA(data, 30);
+  indicators.SMA_50 = calculateSMA(data, 50);
+  indicators.SMA_55 = calculateSMA(data, 55);
+  indicators.SMA_89 = calculateSMA(data, 89);
+  indicators.SMA_100 = calculateSMA(data, 100);
+  indicators.SMA_144 = calculateSMA(data, 144);
+  indicators.SMA_200 = calculateSMA(data, 200);
+
+  // Moving Averages - EMA (Close)
+  indicators.EMA_3 = calculateEMA(data, 3);
+  indicators.EMA_5 = calculateEMA(data, 5);
+  indicators.EMA_8 = calculateEMA(data, 8);
+  indicators.EMA_10 = calculateEMA(data, 10);
+  indicators.EMA_12 = calculateEMA(data, 12);
+  indicators.EMA_15 = calculateEMA(data, 15);
+  indicators.EMA_20 = calculateEMA(data, 20);
+  indicators.EMA_21 = calculateEMA(data, 21);
+  indicators.EMA_26 = calculateEMA(data, 26);
+  indicators.EMA_30 = calculateEMA(data, 30);
+  indicators.EMA_50 = calculateEMA(data, 50);
+  indicators.EMA_55 = calculateEMA(data, 55);
+  indicators.EMA_89 = calculateEMA(data, 89);
+  indicators.EMA_100 = calculateEMA(data, 100);
+  indicators.EMA_144 = calculateEMA(data, 144);
+  indicators.EMA_200 = calculateEMA(data, 200);
+
+  // Moving Averages - SMA (High, Low, Open)
+  indicators.SMA_20_High = calculateSMA(data, 20, 'high');
+  indicators.SMA_20_Low = calculateSMA(data, 20, 'low');
+  indicators.SMA_20_Open = calculateSMA(data, 20, 'open');
+  indicators.SMA_50_High = calculateSMA(data, 50, 'high');
+  indicators.SMA_50_Low = calculateSMA(data, 50, 'low');
+  indicators.SMA_50_Open = calculateSMA(data, 50, 'open');
+
+  // Bollinger Bands (Multiple Periods)
+  const bb10 = calculateBollingerBands(data, 10, 2);
+  indicators.BB10_Upper = bb10.upper;
+  indicators.BB10_Middle = bb10.middle;
+  indicators.BB10_Lower = bb10.lower;
+  indicators.BB10_Bandwidth = bb10.bandwidth;
+  indicators.BB10_PercentB = bb10.percentB;
+
+  const bb20 = calculateBollingerBands(data, 20, 2);
+  indicators.BB20_Upper = bb20.upper;
+  indicators.BB20_Middle = bb20.middle;
+  indicators.BB20_Lower = bb20.lower;
+  indicators.BB20_Bandwidth = bb20.bandwidth;
+  indicators.BB20_PercentB = bb20.percentB;
+
+  const bb50 = calculateBollingerBands(data, 50, 2);
+  indicators.BB50_Upper = bb50.upper;
+  indicators.BB50_Middle = bb50.middle;
+  indicators.BB50_Lower = bb50.lower;
+  indicators.BB50_Bandwidth = bb50.bandwidth;
+  indicators.BB50_PercentB = bb50.percentB;
+
+  // RSI (Multiple Periods)
+  indicators.RSI_7 = calculateRSI(data, 7);
+  indicators.RSI_9 = calculateRSI(data, 9);
+  indicators.RSI_14 = calculateRSI(data, 14);
+  indicators.RSI_21 = calculateRSI(data, 21);
+  indicators.RSI_25 = calculateRSI(data, 25);
+  indicators.RSI_30 = calculateRSI(data, 30);
+
+  // MACD Variations
+  const macd1226 = calculateMACD(data, 12, 26, 9);
+  indicators.MACD_12_26_Line = macd1226.macdLine;
+  indicators.MACD_12_26_Signal = macd1226.signalLine;
+  indicators.MACD_12_26_Histogram = macd1226.histogram;
+
+  const macd535 = calculateMACD(data, 5, 35, 5);
+  indicators.MACD_5_35_Line = macd535.macdLine;
+  indicators.MACD_5_35_Signal = macd535.signalLine;
+  indicators.MACD_5_35_Histogram = macd535.histogram;
+
+  // Volatility Indicators
+  indicators.ATR_7 = calculateATR(data, 7);
+  indicators.ATR_14 = calculateATR(data, 14);
+  indicators.ATR_21 = calculateATR(data, 21);
+  indicators.ATR_28 = calculateATR(data, 28);
+  indicators.StdDev_10 = calculateStdDev(data, 10);
+  indicators.StdDev_20 = calculateStdDev(data, 20);
+  indicators.StdDev_30 = calculateStdDev(data, 30);
+  indicators.StdDev_50 = calculateStdDev(data, 50);
+  indicators.StdDev_100 = calculateStdDev(data, 100);
+
+  // Stochastic Oscillator
+  const stoch_fast = calculateStochastic(data, 5, 3);
+  indicators.Stoch_K_Fast = stoch_fast.k;
+  indicators.Stoch_D_Fast = stoch_fast.d;
+
+  const stoch = calculateStochastic(data, 14, 3);
+  indicators.Stoch_K = stoch.k;
+  indicators.Stoch_D = stoch.d;
+
+  const stoch_slow = calculateStochastic(data, 21, 5);
+  indicators.Stoch_K_Slow = stoch_slow.k;
+  indicators.Stoch_D_Slow = stoch_slow.d;
+
+  // Momentum Indicators
+  indicators.CCI_10 = calculateCCI(data, 10);
+  indicators.CCI_14 = calculateCCI(data, 14);
+  indicators.CCI_20 = calculateCCI(data, 20);
+  indicators.CCI_30 = calculateCCI(data, 30);
+  indicators.WilliamsR_7 = calculateWilliamsR(data, 7);
+  indicators.WilliamsR_14 = calculateWilliamsR(data, 14);
+  indicators.WilliamsR_21 = calculateWilliamsR(data, 21);
+  indicators.ROC_5 = calculateROC(data, 5);
+  indicators.ROC_10 = calculateROC(data, 10);
+  indicators.ROC_12 = calculateROC(data, 12);
+  indicators.ROC_20 = calculateROC(data, 20);
+  indicators.ROC_25 = calculateROC(data, 25);
+
+  // Volume Indicators
+  indicators.OBV = calculateOBV(data);
+  indicators.Volume_SMA_10 = calculateSMA(data, 10, 'volume');
+  indicators.Volume_SMA_20 = calculateSMA(data, 20, 'volume');
+  indicators.Volume_SMA_30 = calculateSMA(data, 30, 'volume');
+  indicators.Volume_SMA_50 = calculateSMA(data, 50, 'volume');
+  indicators.Volume_EMA_20 = calculateEMA(data, 20, 'volume');
+  indicators.VWAP = calculateVWAP(data);
+  indicators.MFI_10 = calculateMFI(data, 10);
+  indicators.MFI_14 = calculateMFI(data, 14);
+  indicators.MFI_20 = calculateMFI(data, 20);
+  indicators.Volume_Change = data.map((d, i) => i === 0 ? 0 : (d.volume || 0) - (data[i - 1].volume || 0));
+  indicators.Volume_Change_Pct = data.map((d, i) => i === 0 ? 0 : data[i - 1].volume === 0 ? 0 : (((d.volume || 0) - (data[i - 1].volume || 0)) / (data[i - 1].volume || 1)) * 100);
+
+  // Trend Indicators
+  const adx = calculateADX(data, 14);
+  indicators.ADX_14 = adx.adx;
+  indicators.PlusDI_14 = adx.plusDI;
+  indicators.MinusDI_14 = adx.minusDI;
+
+  const adx21 = calculateADX(data, 21);
+  indicators.ADX_21 = adx21.adx;
+  indicators.PlusDI_21 = adx21.plusDI;
+  indicators.MinusDI_21 = adx21.minusDI;
+
+  const psar = calculateParabolicSAR(data);
+  indicators.PSAR = psar.sar;
+  indicators.PSAR_Trend = psar.trend;
+
+  const aroon14 = calculateAroon(data, 14);
+  indicators.Aroon_Up_14 = aroon14.aroonUp;
+  indicators.Aroon_Down_14 = aroon14.aroonDown;
+
+  const aroon = calculateAroon(data, 25);
+  indicators.Aroon_Up = aroon.aroonUp;
+  indicators.Aroon_Down = aroon.aroonDown;
+  indicators.Aroon_Oscillator_14 = aroon14.aroonUp.map((up, i) => up !== null && aroon14.aroonDown[i] !== null ? up - aroon14.aroonDown[i] : null);
+  indicators.Aroon_Oscillator_25 = aroon.aroonUp.map((up, i) => up !== null && aroon.aroonDown[i] !== null ? up - aroon.aroonDown[i] : null);
+
+  // Support and Resistance
+  const sr10 = calculateSupportResistance(data, 10);
+  indicators.Support_10 = sr10.support;
+  indicators.Resistance_10 = sr10.resistance;
+
+  const sr20 = calculateSupportResistance(data, 20);
+  indicators.Support_20 = sr20.support;
+  indicators.Resistance_20 = sr20.resistance;
+
+  const sr50 = calculateSupportResistance(data, 50);
+  indicators.Support_50 = sr50.support;
+  indicators.Resistance_50 = sr50.resistance;
+
+  const sr100 = calculateSupportResistance(data, 100);
+  indicators.Support_100 = sr100.support;
+  indicators.Resistance_100 = sr100.resistance;
+
+  // Pivot Points
+  const pivots = calculatePivotPoints(data);
+  indicators.Pivot = pivots.pivot;
+  indicators.Pivot_R1 = pivots.r1;
+  indicators.Pivot_R2 = pivots.r2;
+  indicators.Pivot_R3 = pivots.r3;
+  indicators.Pivot_S1 = pivots.s1;
+  indicators.Pivot_S2 = pivots.s2;
+  indicators.Pivot_S3 = pivots.s3;
+
+  // Linear Regression Trendlines
+  const lr20 = calculateLinearRegression(data, 20);
+  indicators.LR20_Slope = lr20.slope;
+  indicators.LR20_Intercept = lr20.intercept;
+  indicators.LR20_RSquared = lr20.rSquared;
+  indicators.LR20_Forecast = lr20.forecast;
+
+  const lr50 = calculateLinearRegression(data, 50);
+  indicators.LR50_Slope = lr50.slope;
+  indicators.LR50_Intercept = lr50.intercept;
+  indicators.LR50_RSquared = lr50.rSquared;
+  indicators.LR50_Forecast = lr50.forecast;
+
+  const lr100 = calculateLinearRegression(data, 100);
+  indicators.LR100_Slope = lr100.slope;
+  indicators.LR100_Intercept = lr100.intercept;
+  indicators.LR100_RSquared = lr100.rSquared;
+  indicators.LR100_Forecast = lr100.forecast;
+
+  // Fibonacci Levels
+  const fib20 = calculateFibonacci(data, 20);
+  indicators.Fib20_236 = fib20.fib236;
+  indicators.Fib20_382 = fib20.fib382;
+  indicators.Fib20_500 = fib20.fib500;
+  indicators.Fib20_618 = fib20.fib618;
+  indicators.Fib20_786 = fib20.fib786;
+
+  const fib50 = calculateFibonacci(data, 50);
+  indicators.Fib50_236 = fib50.fib236;
+  indicators.Fib50_382 = fib50.fib382;
+  indicators.Fib50_500 = fib50.fib500;
+  indicators.Fib50_618 = fib50.fib618;
+  indicators.Fib50_786 = fib50.fib786;
+
+  const fib100 = calculateFibonacci(data, 100);
+  indicators.Fib100_236 = fib100.fib236;
+  indicators.Fib100_382 = fib100.fib382;
+  indicators.Fib100_500 = fib100.fib500;
+  indicators.Fib100_618 = fib100.fib618;
+  indicators.Fib100_786 = fib100.fib786;
+
+  // Pattern Recognition
+  const patterns = calculatePatterns(data);
+  indicators.Higher_High = patterns.higherHigh;
+  indicators.Lower_Low = patterns.lowerLow;
+  indicators.Trend_Direction = patterns.trendDirection;
+
+  // Additional Price Action Indicators
+  indicators.Price_Change = data.map((d, i) => i === 0 ? 0 : d.close - data[i - 1].close);
+  indicators.Price_Change_Pct = data.map((d, i) => i === 0 ? 0 : data[i - 1].close === 0 ? 0 : ((d.close - data[i - 1].close) / data[i - 1].close) * 100);
+  indicators.High_Low_Range = data.map(d => d.high - d.low);
+  indicators.Body_Size = data.map(d => Math.abs(d.close - d.open));
+  indicators.Upper_Shadow = data.map(d => d.high - Math.max(d.open, d.close));
+  indicators.Lower_Shadow = data.map(d => Math.min(d.open, d.close) - d.low);
+  indicators.Bullish_Candle = data.map(d => d.close > d.open ? 1 : 0);
+  indicators.Bearish_Candle = data.map(d => d.close < d.open ? 1 : 0);
+
+  // Distance from Moving Averages
+  indicators.Dist_From_SMA20 = data.map((d, i) => indicators.SMA_20[i] ? d.close - indicators.SMA_20[i] : null);
+  indicators.Dist_From_SMA50 = data.map((d, i) => indicators.SMA_50[i] ? d.close - indicators.SMA_50[i] : null);
+  indicators.Dist_From_SMA100 = data.map((d, i) => indicators.SMA_100[i] ? d.close - indicators.SMA_100[i] : null);
+  indicators.Dist_From_SMA200 = data.map((d, i) => indicators.SMA_200[i] ? d.close - indicators.SMA_200[i] : null);
+  indicators.Dist_From_EMA20 = data.map((d, i) => indicators.EMA_20[i] ? d.close - indicators.EMA_20[i] : null);
+  indicators.Dist_From_EMA50 = data.map((d, i) => indicators.EMA_50[i] ? d.close - indicators.EMA_50[i] : null);
+  indicators.Dist_From_EMA100 = data.map((d, i) => indicators.EMA_100[i] ? d.close - indicators.EMA_100[i] : null);
+  indicators.Dist_From_EMA200 = data.map((d, i) => indicators.EMA_200[i] ? d.close - indicators.EMA_200[i] : null);
+
+  // Price percentage from MAs
+  indicators.Pct_From_SMA20 = data.map((d, i) => indicators.SMA_20[i] && indicators.SMA_20[i] !== 0 ? ((d.close - indicators.SMA_20[i]) / indicators.SMA_20[i]) * 100 : null);
+  indicators.Pct_From_SMA50 = data.map((d, i) => indicators.SMA_50[i] && indicators.SMA_50[i] !== 0 ? ((d.close - indicators.SMA_50[i]) / indicators.SMA_50[i]) * 100 : null);
+  indicators.Pct_From_EMA20 = data.map((d, i) => indicators.EMA_20[i] && indicators.EMA_20[i] !== 0 ? ((d.close - indicators.EMA_20[i]) / indicators.EMA_20[i]) * 100 : null);
+  indicators.Pct_From_EMA50 = data.map((d, i) => indicators.EMA_50[i] && indicators.EMA_50[i] !== 0 ? ((d.close - indicators.EMA_50[i]) / indicators.EMA_50[i]) * 100 : null);
+
+  // More crossovers
+  indicators.SMA10_Above_SMA20 = data.map((d, i) => indicators.SMA_10[i] && indicators.SMA_20[i] ? (indicators.SMA_10[i] > indicators.SMA_20[i] ? 1 : 0) : null);
+  indicators.SMA20_Above_SMA50 = data.map((d, i) => indicators.SMA_20[i] && indicators.SMA_50[i] ? (indicators.SMA_20[i] > indicators.SMA_50[i] ? 1 : 0) : null);
+  indicators.SMA50_Above_SMA100 = data.map((d, i) => indicators.SMA_50[i] && indicators.SMA_100[i] ? (indicators.SMA_50[i] > indicators.SMA_100[i] ? 1 : 0) : null);
+  indicators.SMA100_Above_SMA200 = data.map((d, i) => indicators.SMA_100[i] && indicators.SMA_200[i] ? (indicators.SMA_100[i] > indicators.SMA_200[i] ? 1 : 0) : null);
+  indicators.EMA5_Above_EMA10 = data.map((d, i) => indicators.EMA_5[i] && indicators.EMA_10[i] ? (indicators.EMA_5[i] > indicators.EMA_10[i] ? 1 : 0) : null);
+  indicators.EMA12_Above_EMA26 = data.map((d, i) => indicators.EMA_12[i] && indicators.EMA_26[i] ? (indicators.EMA_12[i] > indicators.EMA_26[i] ? 1 : 0) : null);
+  indicators.EMA20_Above_EMA50 = data.map((d, i) => indicators.EMA_20[i] && indicators.EMA_50[i] ? (indicators.EMA_20[i] > indicators.EMA_50[i] ? 1 : 0) : null);
+
+  // Price position indicators
+  indicators.Close_Above_Open = data.map(d => d.close > d.open ? 1 : 0);
+  indicators.High_Equal_Close = data.map(d => Math.abs(d.high - d.close) < 0.00001 ? 1 : 0);
+  indicators.Low_Equal_Close = data.map(d => Math.abs(d.low - d.close) < 0.00001 ? 1 : 0);
+  indicators.Close_Above_BB_Upper = data.map((d, i) => indicators.BB20_Upper[i] ? (d.close > indicators.BB20_Upper[i] ? 1 : 0) : null);
+  indicators.Close_Below_BB_Lower = data.map((d, i) => indicators.BB20_Lower[i] ? (d.close < indicators.BB20_Lower[i] ? 1 : 0) : null);
+
+  // Price momentum
+  indicators.Close_2_Candles_Ago = data.map((d, i) => i < 2 ? null : data[i - 2].close);
+  indicators.Close_3_Candles_Ago = data.map((d, i) => i < 3 ? null : data[i - 3].close);
+  indicators.Price_Change_2_Candles = data.map((d, i) => i < 2 ? null : d.close - data[i - 2].close);
+  indicators.Price_Change_3_Candles = data.map((d, i) => i < 3 ? null : d.close - data[i - 3].close);
+  indicators.Price_Change_5_Candles = data.map((d, i) => i < 5 ? null : d.close - data[i - 5].close);
+
+  // Candle patterns
+  indicators.Doji = data.map(d => Math.abs(d.close - d.open) / (d.high - d.low || 1) < 0.1 ? 1 : 0);
+  indicators.Hammer = data.map(d => {
+    const body = Math.abs(d.close - d.open);
+    const lowerShadow = Math.min(d.open, d.close) - d.low;
+    const upperShadow = d.high - Math.max(d.open, d.close);
+    return (lowerShadow > body * 2 && upperShadow < body) ? 1 : 0;
+  });
+  indicators.Shooting_Star = data.map(d => {
+    const body = Math.abs(d.close - d.open);
+    const lowerShadow = Math.min(d.open, d.close) - d.low;
+    const upperShadow = d.high - Math.max(d.open, d.close);
+    return (upperShadow > body * 2 && lowerShadow < body) ? 1 : 0;
+  });
+
+  // True Range and normalized ATR
+  indicators.True_Range = data.map((d, i) => {
+    if (i === 0) return d.high - d.low;
+    const hl = d.high - d.low;
+    const hc = Math.abs(d.high - data[i - 1].close);
+    const lc = Math.abs(d.low - data[i - 1].close);
+    return Math.max(hl, hc, lc);
+  });
+  indicators.ATR_Pct_14 = data.map((d, i) => indicators.ATR_14[i] && d.close !== 0 ? (indicators.ATR_14[i] / d.close) * 100 : null);
+
+  console.log(`Calculated ${Object.keys(indicators).length} indicator series`);
+  return indicators;
+}
+
+// ============================================================================
+// END OF INDICATORS LIBRARY - 173+ INDICATORS READY FOR CSV EXPORT
+// ============================================================================
+</script>
+
+<!-- ========================================================================== -->
+<!-- END OF COPY SECTION - Paste this above before closing </body> tag        -->
+<!-- ========================================================================== -->
+
+
+
+</body>
+</html>
