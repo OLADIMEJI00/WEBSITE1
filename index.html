@@ -1765,6 +1765,648 @@ function calculateAllIndicators(data) {
 // ============================================================================
 </script>
 
+
+  <!-- ===== EXTRA INDICATORS MODULE (40+ Advanced Indicators) ===== -->
+<script>
+// Helper Functions for Extra Indicators
+function calculateATR(data, period = 14) {
+  const atr = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i === 0) {
+      atr.push(null);
+    } else {
+      const tr = Math.max(
+        data[i].high - data[i].low,
+        Math.abs(data[i].high - data[i - 1].close),
+        Math.abs(data[i].low - data[i - 1].close)
+      );
+      if (i < period) {
+        atr.push(tr);
+      } else {
+        const prevATR = atr[i - 1] || tr;
+        atr.push((prevATR * (period - 1) + tr) / period);
+      }
+    }
+  }
+  return atr;
+}
+
+function calculateBollingerBands(data, period = 20, stdDev = 2) {
+  const sma = calculateSMA(data, period);
+  const upper = [];
+  const lower = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1 || !sma[i]) {
+      upper.push(null);
+      lower.push(null);
+    } else {
+      let sumSquares = 0;
+      for (let j = 0; j < period; j++) {
+        sumSquares += Math.pow(data[i - j].close - sma[i], 2);
+      }
+      const std = Math.sqrt(sumSquares / period);
+      upper.push(sma[i] + stdDev * std);
+      lower.push(sma[i] - stdDev * std);
+    }
+  }
+  return { middle: sma, upper, lower };
+}
+
+// Main Extra Indicators Function (40+ Indicators)
+function extraIndicators(data, index) {
+  if (!data || data.length < 100 || index < 100) {
+    return {};
+  }
+
+  const results = {};
+  const d = data[index];
+  const lookback = data.slice(Math.max(0, index - 100), index + 1);
+  
+  const atr = calculateATR(lookback, 14);
+  const atrValue = atr[atr.length - 1];
+  const ema20 = calculateEMA(lookback, 20);
+  const sma20 = calculateSMA(lookback, 20);
+  const sma50 = calculateSMA(lookback, 50);
+  const bb = calculateBollingerBands(lookback, 20, 2);
+  
+  // VOLATILITY METRICS (9)
+  results.KC_Upper = ema20[ema20.length - 1] + 2 * atrValue;
+  results.KC_Middle = ema20[ema20.length - 1];
+  results.KC_Lower = ema20[ema20.length - 1] - 2 * atrValue;
+  
+  const highest20 = Math.max(...lookback.slice(-20).map(c => c.high));
+  const lowest20 = Math.min(...lookback.slice(-20).map(c => c.low));
+  results.DC_Upper = highest20;
+  results.DC_Lower = lowest20;
+  results.DC_Middle = (highest20 + lowest20) / 2;
+  
+  if (lookback.length >= 10) {
+    const hl_range = lookback.slice(-10).map(c => c.high - c.low);
+    const ema_hl = hl_range.reduce((sum, val, i, arr) => {
+      if (i === 0) return val;
+      return sum * 0.9 + val * 0.1;
+    }, hl_range[0]);
+    results.ChaikinVolatility = ema_hl !== 0 ? ((hl_range[hl_range.length - 1] - ema_hl) / ema_hl) * 100 : 0;
+  } else {
+    results.ChaikinVolatility = 0;
+  }
+  
+  if (lookback.length >= 30) {
+    const returns = [];
+    for (let i = 1; i < lookback.length; i++) {
+      returns.push(Math.log(lookback[i].close / lookback[i - 1].close));
+    }
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / returns.length;
+    results.HistoricalVolatility = Math.sqrt(variance * 252) * 100;
+  } else {
+    results.HistoricalVolatility = 0;
+  }
+  
+  if (lookback.length >= 14) {
+    let sumSquaredLoss = 0;
+    for (let i = 1; i < lookback.length; i++) {
+      const pctChange = ((lookback[i].close - lookback[i - 1].close) / lookback[i - 1].close) * 100;
+      if (pctChange < 0) {
+        sumSquaredLoss += pctChange * pctChange;
+      }
+    }
+    results.UlcerIndex = Math.sqrt(sumSquaredLoss / 14);
+  } else {
+    results.UlcerIndex = 0;
+  }
+  
+  if (lookback.length >= 5) {
+    const range5 = lookback.slice(-5).map(c => c.high - c.low);
+    const avgRange = range5.reduce((a, b) => a + b) / range5.length;
+    results.REI = avgRange !== 0 ? (range5[range5.length - 1] / avgRange - 1) * 100 : 0;
+  } else {
+    results.REI = 0;
+  }
+  
+  results.ATRBand_Upper = d.close + 2 * atrValue;
+  results.ATRBand_Lower = d.close - 2 * atrValue;
+  
+  const bb2 = calculateBollingerBands(lookback, 20, 1);
+  results.DBB_Upper1 = bb.upper[bb.upper.length - 1];
+  results.DBB_Upper2 = bb2.upper[bb2.upper.length - 1];
+  results.DBB_Middle = bb.middle[bb.middle.length - 1];
+  results.DBB_Lower1 = bb2.lower[bb2.lower.length - 1];
+  results.DBB_Lower2 = bb.lower[bb.lower.length - 1];
+  
+  if (lookback.length >= 10) {
+    const maxClose = Math.max(...lookback.slice(-10).map(c => c.close));
+    const minClose = Math.min(...lookback.slice(-10).map(c => c.close));
+    const range = maxClose - minClose;
+    results.PB_Upper = maxClose + 0.382 * range;
+    results.PB_Lower = minClose - 0.382 * range;
+  } else {
+    results.PB_Upper = d.high;
+    results.PB_Lower = d.low;
+  }
+  
+  // MOMENTUM METRICS (14)
+  if (lookback.length >= 28) {
+    const avg7 = lookback.slice(-7).reduce((sum, c) => sum + (c.high + c.low) / 2, 0) / 7;
+    const avg14 = lookback.slice(-14).reduce((sum, c) => sum + (c.high + c.low) / 2, 0) / 14;
+    const avg28 = lookback.slice(-28).reduce((sum, c) => sum + (c.high + c.low) / 2, 0) / 28;
+    const min7 = Math.min(...lookback.slice(-7).map(c => c.low));
+    const max7 = Math.max(...lookback.slice(-7).map(c => c.high));
+    const min14 = Math.min(...lookback.slice(-14).map(c => c.low));
+    const max14 = Math.max(...lookback.slice(-14).map(c => c.high));
+    const min28 = Math.min(...lookback.slice(-28).map(c => c.low));
+    const max28 = Math.max(...lookback.slice(-28).map(c => c.high));
+    const range7 = max7 - min7;
+    const range14 = max14 - min14;
+    const range28 = max28 - min28;
+    results.UltimateOscillator = (
+      (4 * (range7 !== 0 ? (avg7 - min7) / range7 : 0.5)) +
+      (2 * (range14 !== 0 ? (avg14 - min14) / range14 : 0.5)) +
+      (range28 !== 0 ? (avg28 - min28) / range28 : 0.5)
+    ) / 7 * 100;
+  } else {
+    results.UltimateOscillator = 50;
+  }
+  
+  if (lookback.length >= 34) {
+    const sma5 = lookback.slice(-34).reduce((sum, c, i) => {
+      if (i >= 29) sum += (c.high + c.low) / 2;
+      return sum;
+    }, 0) / 5;
+    const sma34 = lookback.slice(-34).reduce((sum, c) => sum + (c.high + c.low) / 2, 0) / 34;
+    results.AwesomeOscillator = sma5 - sma34;
+  } else {
+    results.AwesomeOscillator = 0;
+  }
+  
+  if (lookback.length >= 15) {
+    const ema1 = calculateEMA(lookback, 15);
+    const trix = [];
+    for (let i = 1; i < ema1.length; i++) {
+      if (ema1[i] && ema1[i - 1]) {
+        trix.push(((ema1[i] - ema1[i - 1]) / ema1[i - 1]) * 100);
+      }
+    }
+    results.TRIX = trix.length > 0 ? trix[trix.length - 1] : 0;
+  } else {
+    results.TRIX = 0;
+  }
+  
+  if (lookback.length >= 25) {
+    const momentum = [];
+    for (let i = 25; i < lookback.length; i++) {
+      momentum.push(lookback[i].close - lookback[i - 25].close);
+    }
+    const ema25 = momentum.reduce((a, b, i) => {
+      if (i === 0) return b;
+      return a * 0.92 + b * 0.08;
+    }, momentum[0]);
+    const absEma25 = momentum.map(Math.abs).reduce((a, b, i) => {
+      if (i === 0) return b;
+      return a * 0.92 + b * 0.08;
+    }, Math.abs(momentum[0]));
+    results.TSI = absEma25 !== 0 ? (ema25 / absEma25) * 100 : 0;
+  } else {
+    results.TSI = 0;
+  }
+  
+  if (lookback.length >= 9) {
+    const lowestLow = Math.min(...lookback.slice(-9).map(c => c.low));
+    const highestHigh = Math.max(...lookback.slice(-9).map(c => c.high));
+    const range = highestHigh - lowestLow;
+    if (range !== 0) {
+      const rsv = ((d.close - lowestLow) / range) * 100;
+      results.KDJ_K = rsv;
+      results.KDJ_D = rsv * 0.667 + 33.333;
+      results.KDJ_J = 3 * results.KDJ_K - 2 * results.KDJ_D;
+    } else {
+      results.KDJ_K = 50;
+      results.KDJ_D = 50;
+      results.KDJ_J = 50;
+    }
+  } else {
+    results.KDJ_K = 50;
+    results.KDJ_D = 50;
+    results.KDJ_J = 50;
+  }
+  
+  const rsi = calculateRSI(lookback, 3);
+  const rsi3 = rsi[rsi.length - 1] || 50;
+  results.ConnorsRSI = rsi3;
+  
+  if (lookback.length >= 10) {
+    const hlc3 = lookback.map(c => (c.high + c.low + c.close) / 3);
+    const esa = hlc3.reduce((a, b, i) => {
+      if (i === 0) return b;
+      return a * 0.9 + b * 0.1;
+    }, hlc3[0]);
+    const d_val = Math.abs(hlc3[hlc3.length - 1] - esa);
+    const denominator = 0.015 * d_val;
+    const ci = denominator !== 0 ? (hlc3[hlc3.length - 1] - esa) / denominator : 0;
+    results.WaveTrend = ci;
+  } else {
+    results.WaveTrend = 0;
+  }
+  
+  if (lookback.length >= 13) {
+    const volume = lookback.map((c, i) => {
+      const vol = (c.high - c.low) * 1000;
+      return i > 0 ? (c.close - lookback[i - 1].close) * vol : 0;
+    });
+    const ema13 = volume.reduce((a, b, i) => {
+      if (i === 0) return b;
+      return a * 0.857 + b * 0.143;
+    }, volume[0]);
+    results.ForceIndex = ema13;
+  } else {
+    results.ForceIndex = 0;
+  }
+  
+  if (lookback.length >= 20) {
+    const sma20_val = sma20[sma20.length - 1];
+    const displaced = index >= 10 ? data[index - 10].close : d.close;
+    results.DPO = d.close - displaced;
+  } else {
+    results.DPO = 0;
+  }
+  
+  if (lookback.length >= 30) {
+    const roc1 = ((d.close - data[Math.max(0, index - 10)].close) / data[Math.max(0, index - 10)].close) * 100;
+    const roc2 = ((d.close - data[Math.max(0, index - 15)].close) / data[Math.max(0, index - 15)].close) * 100;
+    const roc3 = ((d.close - data[Math.max(0, index - 20)].close) / data[Math.max(0, index - 20)].close) * 100;
+    const roc4 = ((d.close - data[Math.max(0, index - 30)].close) / data[Math.max(0, index - 30)].close) * 100;
+    results.KST = roc1 + roc2 + roc3 + roc4;
+  } else {
+    results.KST = 0;
+  }
+  
+  if (lookback.length >= 14) {
+    const numerator = lookback.slice(-14).reduce((sum, c, i) => {
+      if (i > 0) {
+        const change = c.close - lookback.slice(-14)[i - 1].close;
+        sum += change * (i + 1);
+      }
+      return sum;
+    }, 0);
+    const denominator = lookback.slice(-14).reduce((sum, c, i) => {
+      if (i > 0) {
+        sum += Math.abs(c.high - c.low) * (i + 1);
+      }
+      return sum;
+    }, 0);
+    results.RVI = denominator !== 0 ? numerator / denominator : 0;
+  } else {
+    results.RVI = 0;
+  }
+  
+  if (lookback.length >= 14) {
+    const typicalPrice = lookback.map(c => (c.high + c.low + c.close) / 3);
+    const moneyFlow = typicalPrice.map((tp, i) => tp * (lookback[i].high - lookback[i].low) * 1000);
+    let positiveFlow = 0, negativeFlow = 0;
+    for (let i = 1; i < Math.min(14, moneyFlow.length); i++) {
+      if (typicalPrice[typicalPrice.length - i] > typicalPrice[typicalPrice.length - i - 1]) {
+        positiveFlow += moneyFlow[moneyFlow.length - i];
+      } else {
+        negativeFlow += moneyFlow[moneyFlow.length - i];
+      }
+    }
+    const mfr = negativeFlow !== 0 ? positiveFlow / negativeFlow : 100;
+    results.MFI = 100 - (100 / (1 + mfr));
+  } else {
+    results.MFI = 50;
+  }
+  
+  if (lookback.length >= 14) {
+    const distance = ((d.high + d.low) / 2) - ((lookback[lookback.length - 14].high + lookback[lookback.length - 14].low) / 2);
+    const boxRatio = ((d.high - d.low) * 1000000) || 1;
+    results.EaseOfMovement = distance / boxRatio * 100000;
+  } else {
+    results.EaseOfMovement = 0;
+  }
+  
+  if (index >= 1) {
+    const prevClose = data[index - 1].close;
+    results.BalanceOfPower = (d.close - d.open) / (d.high - d.low || 0.0001);
+  } else {
+    results.BalanceOfPower = 0;
+  }
+  
+  // TREND METRICS (8)
+  if (lookback.length >= 26) {
+    let plusDM = 0, minusDM = 0, tr = 0;
+    for (let i = 1; i < Math.min(14, lookback.length); i++) {
+      const high = lookback[lookback.length - i].high;
+      const low = lookback[lookback.length - i].low;
+      const prevHigh = lookback[lookback.length - i - 1].high;
+      const prevLow = lookback[lookback.length - i - 1].low;
+      const prevClose = lookback[lookback.length - i - 1].close;
+      
+      plusDM += Math.max(high - prevHigh, 0);
+      minusDM += Math.max(prevLow - low, 0);
+      tr += Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+    }
+    const plusDI = tr !== 0 ? (plusDM / tr) * 100 : 0;
+    const minusDI = tr !== 0 ? (minusDM / tr) * 100 : 0;
+    const dx = (plusDI + minusDI) !== 0 ? Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100 : 0;
+    results.ADX = dx;
+    results.DIPlus = plusDI;
+    results.DIMinus = minusDI;
+  } else {
+    results.ADX = 0;
+    results.DIPlus = 0;
+    results.DIMinus = 0;
+  }
+  
+  if (lookback.length >= 14) {
+    const highest = Math.max(...lookback.slice(-14).map(c => c.high));
+    const lowest = Math.min(...lookback.slice(-14).map(c => c.low));
+    const atr14 = atrValue;
+    const range = highest - lowest;
+    results.CHOP = range !== 0 ? (Math.log10(atr14 * 14 / range) / Math.log10(14)) * 100 : 0;
+  } else {
+    results.CHOP = 50;
+  }
+  
+  if (lookback.length >= 14) {
+    let plusVI = 0, minusVI = 0, trSum = 0;
+    for (let i = 1; i < Math.min(14, lookback.length); i++) {
+      const curr = lookback[lookback.length - i];
+      const prev = lookback[lookback.length - i - 1];
+      plusVI += Math.abs(curr.high - prev.low);
+      minusVI += Math.abs(curr.low - prev.high);
+      trSum += Math.max(curr.high - curr.low, Math.abs(curr.high - prev.close), Math.abs(curr.low - prev.close));
+    }
+    results.VortexPlus = trSum !== 0 ? plusVI / trSum : 0;
+    results.VortexMinus = trSum !== 0 ? minusVI / trSum : 0;
+  } else {
+    results.VortexPlus = 1;
+    results.VortexMinus = 1;
+  }
+  
+  if (lookback.length >= 10) {
+    const multiplier = 3;
+    const basicUpperBand = sma20[sma20.length - 1] + multiplier * atrValue;
+    const basicLowerBand = sma20[sma20.length - 1] - multiplier * atrValue;
+    results.SuperTrend = d.close > basicUpperBand ? basicLowerBand : basicUpperBand;
+  } else {
+    results.SuperTrend = d.close;
+  }
+  
+  if (lookback.length >= 16) {
+    const wma = (n) => {
+      const weights = [];
+      for (let i = 1; i <= n; i++) weights.push(i);
+      const sum = weights.reduce((a, b) => a + b);
+      return lookback.slice(-n).reduce((acc, c, i) => acc + c.close * weights[i], 0) / sum;
+    };
+    const period = 16;
+    const sqrtPeriod = Math.floor(Math.sqrt(period));
+    results.HMA = wma(sqrtPeriod);
+  } else {
+    results.HMA = d.close;
+  }
+  
+  if (lookback.length >= 52) {
+    const tenkan = (Math.max(...lookback.slice(-9).map(c => c.high)) + Math.min(...lookback.slice(-9).map(c => c.low))) / 2;
+    const kijun = (Math.max(...lookback.slice(-26).map(c => c.high)) + Math.min(...lookback.slice(-26).map(c => c.low))) / 2;
+    const senkouA = (tenkan + kijun) / 2;
+    const senkouB = (Math.max(...lookback.slice(-52).map(c => c.high)) + Math.min(...lookback.slice(-52).map(c => c.low))) / 2;
+    results.Ichimoku_Tenkan = tenkan;
+    results.Ichimoku_Kijun = kijun;
+    results.Ichimoku_SenkouA = senkouA;
+    results.Ichimoku_SenkouB = senkouB;
+  } else {
+    results.Ichimoku_Tenkan = d.close;
+    results.Ichimoku_Kijun = d.close;
+    results.Ichimoku_SenkouA = d.close;
+    results.Ichimoku_SenkouB = d.close;
+  }
+  
+  if (lookback.length >= 10) {
+    const first = lookback[lookback.length - 10];
+    const last = lookback[lookback.length - 1];
+    const priceChange = last.close - first.close;
+    const timeChange = 10;
+    const angle = Math.atan(priceChange / timeChange) * (180 / Math.PI);
+    results.TrendlineAngle = angle;
+  } else {
+    results.TrendlineAngle = 0;
+  }
+  
+  if (lookback.length >= 20) {
+    const highs = lookback.slice(-20).map(c => c.high);
+    const lows = lookback.slice(-20).map(c => c.low);
+    const upperChannel = Math.max(...highs);
+    const lowerChannel = Math.min(...lows);
+    results.TrendlineChannelWidth = upperChannel - lowerChannel;
+  } else {
+    results.TrendlineChannelWidth = d.high - d.low;
+  }
+  
+  // PATTERN RECOGNITION (12+)
+  if (index >= 1) {
+    const curr = d;
+    const prev = data[index - 1];
+    results.BullishEngulfing = (prev.close < prev.open && curr.close > curr.open && 
+                                 curr.open < prev.close && curr.close > prev.open) ? 1 : 0;
+    results.BearishEngulfing = (prev.close > prev.open && curr.close < curr.open && 
+                                 curr.open > prev.close && curr.close < prev.open) ? 1 : 0;
+  } else {
+    results.BullishEngulfing = 0;
+    results.BearishEngulfing = 0;
+  }
+  
+  if (index >= 2) {
+    const c0 = d;
+    const c1 = data[index - 1];
+    const c2 = data[index - 2];
+    results.MorningStar = (c2.close < c2.open && c1.close < c1.open && c0.close > c0.open && 
+                           c0.close > (c2.open + c2.close) / 2) ? 1 : 0;
+    results.EveningStar = (c2.close > c2.open && c1.close > c1.open && c0.close < c0.open && 
+                           c0.close < (c2.open + c2.close) / 2) ? 1 : 0;
+  } else {
+    results.MorningStar = 0;
+    results.EveningStar = 0;
+  }
+  
+  if (index >= 3) {
+    const candles = [data[index - 3], data[index - 2], data[index - 1], d];
+    const allBullish = candles.every(c => c.close > c.open);
+    const allBearish = candles.every(c => c.close < c.open);
+    const rising = candles[0].close < candles[1].close && candles[1].close < candles[2].close && 
+                   candles[2].close < candles[3].close;
+    const falling = candles[0].close > candles[1].close && candles[1].close > candles[2].close && 
+                    candles[2].close > candles[3].close;
+    results.ThreeWhiteSoldiers = (allBullish && rising) ? 1 : 0;
+    results.ThreeBlackCrows = (allBearish && falling) ? 1 : 0;
+  } else {
+    results.ThreeWhiteSoldiers = 0;
+    results.ThreeBlackCrows = 0;
+  }
+  
+  if (index >= 1) {
+    const curr = d;
+    const prev = data[index - 1];
+    results.InsideBar = (curr.high < prev.high && curr.low > prev.low) ? 1 : 0;
+    results.OutsideBar = (curr.high > prev.high && curr.low < prev.low) ? 1 : 0;
+  } else {
+    results.InsideBar = 0;
+    results.OutsideBar = 0;
+  }
+  
+  if (index >= 1) {
+    const curr = d;
+    const prev = data[index - 1];
+    const prevBody = Math.abs(prev.close - prev.open);
+    const currBody = Math.abs(curr.close - curr.open);
+    results.BullishHarami = (prev.close < prev.open && curr.close > curr.open && 
+                             currBody < prevBody && curr.open > prev.close && curr.close < prev.open) ? 1 : 0;
+    results.BearishHarami = (prev.close > prev.open && curr.close < curr.open && 
+                             currBody < prevBody && curr.open < prev.close && curr.close > prev.open) ? 1 : 0;
+  } else {
+    results.BullishHarami = 0;
+    results.BearishHarami = 0;
+  }
+  
+  if (index >= 1) {
+    const curr = d;
+    const prev = data[index - 1];
+    results.TweezerTop = (Math.abs(curr.high - prev.high) < (curr.high - curr.low) * 0.1 && 
+                          curr.close < prev.close) ? 1 : 0;
+    results.TweezerBottom = (Math.abs(curr.low - prev.low) < (curr.high - curr.low) * 0.1 && 
+                             curr.close > prev.close) ? 1 : 0;
+  } else {
+    results.TweezerTop = 0;
+    results.TweezerBottom = 0;
+  }
+  
+  const body = Math.abs(d.close - d.open);
+  const upperShadow = d.high - Math.max(d.close, d.open);
+  const lowerShadow = Math.min(d.close, d.open) - d.low;
+  results.HangingMan = (d.close < d.open && lowerShadow > 2 * body && upperShadow < body * 0.3) ? 1 : 0;
+  results.InvertedHammer = (d.close > d.open && upperShadow > 2 * body && lowerShadow < body * 0.3) ? 1 : 0;
+  
+  if (index >= 1) {
+    const curr = d;
+    const prev = data[index - 1];
+    const currBody = Math.abs(curr.close - curr.open);
+    const prevBody = Math.abs(prev.close - prev.open);
+    results.PiercingLine = (prev.close < prev.open && curr.close > curr.open && 
+                            curr.open < prev.low && curr.close > (prev.open + prev.close) / 2 && 
+                            curr.close < prev.open) ? 1 : 0;
+    results.DarkCloudCover = (prev.close > prev.open && curr.close < curr.open && 
+                              curr.open > prev.high && curr.close < (prev.open + prev.close) / 2 && 
+                              curr.close > prev.open) ? 1 : 0;
+  } else {
+    results.PiercingLine = 0;
+    results.DarkCloudCover = 0;
+  }
+  
+  if (lookback.length >= 20) {
+    const highs = lookback.slice(-20).map(c => c.high);
+    const lows = lookback.slice(-20).map(c => c.low);
+    const maxHigh = Math.max(...highs);
+    const minLow = Math.min(...lows);
+    const recentHigh = Math.max(...lookback.slice(-5).map(c => c.high));
+    const recentLow = Math.min(...lookback.slice(-5).map(c => c.low));
+    results.TriangleBreakout = (d.close > maxHigh || d.close < minLow) ? 1 : 0;
+    results.FlagBreakout = (d.close > recentHigh * 1.02 || d.close < recentLow * 0.98) ? 1 : 0;
+  } else {
+    results.TriangleBreakout = 0;
+    results.FlagBreakout = 0;
+  }
+  
+  if (lookback.length >= 50) {
+    const prices = lookback.map(c => c.close);
+    const leftPeak = Math.max(...prices.slice(0, 15));
+    const head = Math.max(...prices.slice(15, 30));
+    const rightPeak = Math.max(...prices.slice(30, 45));
+    const isHS = head > leftPeak && head > rightPeak && Math.abs(leftPeak - rightPeak) < leftPeak * 0.05;
+    results.HeadAndShoulders = isHS ? 1 : 0;
+    
+    const leftTrough = Math.min(...prices.slice(0, 15));
+    const headInv = Math.min(...prices.slice(15, 30));
+    const rightTrough = Math.min(...prices.slice(30, 45));
+    const isInvHS = headInv < leftTrough && headInv < rightTrough && Math.abs(leftTrough - rightTrough) < leftTrough * 0.05;
+    results.InverseHeadAndShoulders = isInvHS ? 1 : 0;
+  } else {
+    results.HeadAndShoulders = 0;
+    results.InverseHeadAndShoulders = 0;
+  }
+  
+  if (lookback.length >= 30) {
+    const prices = lookback.map(c => c.close);
+    const firstPeak = Math.max(...prices.slice(0, 15));
+    const secondPeak = Math.max(...prices.slice(15, 30));
+    const isDoubleTop = Math.abs(firstPeak - secondPeak) < firstPeak * 0.02 && 
+                        prices[prices.length - 1] < firstPeak * 0.95;
+    results.DoubleTop = isDoubleTop ? 1 : 0;
+    
+    const firstBottom = Math.min(...prices.slice(0, 15));
+    const secondBottom = Math.min(...prices.slice(15, 30));
+    const isDoubleBottom = Math.abs(firstBottom - secondBottom) < firstBottom * 0.02 && 
+                           prices[prices.length - 1] > firstBottom * 1.05;
+    results.DoubleBottom = isDoubleBottom ? 1 : 0;
+  } else {
+    results.DoubleTop = 0;
+    results.DoubleBottom = 0;
+  }
+  
+  return results;
+}
+
+// MODIFY YOUR CSV EXPORT BUTTON HANDLER TO:
+// el.csv.onclick=()=>{
+//   if(data.length===0){alert('No data to export');return}
+//   let sampleIndicators = {};
+//   for (let i = 0; i < data.length; i++) {
+//     const ind = extraIndicators(data, i);
+//     if (Object.keys(ind).length > 0) {
+//       sampleIndicators = ind;
+//       break;
+//     }
+//   }
+//   const indicatorKeys = Object.keys(sampleIndicators);
+//   const headers=['Time','Open','High','Low','Close', ...indicatorKeys];
+//   const rows=data.map((d,i)=>{
+//     const indicators = extraIndicators(data, i);
+//     const indicatorValues = indicatorKeys.map(key => indicators[key] !== undefined ? indicators[key] : '');
+//     return [new Date(d.time*1000).toISOString(),d.open,d.high,d.low,d.close,...indicatorValues];
+//   });
+//   const csv=[headers,...rows].map(r=>r.join(',')).join('\n');
+//   const blob=new Blob([csv],{type:'text/csv'});
+//   const url=URL.createObjectURL(blob);
+//   const a=document.createElement('a');
+//   a.href=url;
+//   a.download=`${sym}_${gran}s.csv`;
+//   a.click();
+// };
+
+// MODIFY YOUR XLSX EXPORT BUTTON HANDLER TO:
+// el.xlsx.onclick=()=>{
+//   if(data.length===0){alert('No data to export');return}
+//   let sampleIndicators = {};
+//   for (let i = 0; i < data.length; i++) {
+//     const ind = extraIndicators(data, i);
+//     if (Object.keys(ind).length > 0) {
+//       sampleIndicators = ind;
+//       break;
+//     }
+//   }
+//   const indicatorKeys = Object.keys(sampleIndicators);
+//   const ws_data=[['Time','Open','High','Low','Close', ...indicatorKeys]];
+//   data.forEach((d,i)=>{
+//     const indicators = extraIndicators(data, i);
+//     const indicatorValues = indicatorKeys.map(key => indicators[key] !== undefined ? indicators[key] : '');
+//     ws_data.push([new Date(d.time*1000).toISOString(),d.open,d.high,d.low,d.close,...indicatorValues]);
+//   });
+//   const ws=XLSX.utils.aoa_to_sheet(ws_data);
+//   const wb=XLSX.utils.book_new();
+//   XLSX.utils.book_append_sheet(wb,ws,'Data');
+//   XLSX.writeFile(wb,`${sym}_${gran}s.xlsx`);
+// };
+</script>
+<!-- ===== END OF EXTRA INDICATORS MODULE ===== -->
 <!-- ========================================================================== -->
 <!-- END OF COPY SECTION - Paste this above before closing </body> tag        -->
 <!-- ========================================================================== -->
