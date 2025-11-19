@@ -686,10 +686,17 @@ cd.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 // Export CSV
 function exportCSV(){
 if(data.length===0){alert('No data');return}
-let csv='Time,Open,High,Low,Close\n';
-data.forEach(c=>{
+const ind = calculateAllIndicators(data);
+const indicatorKeys = Object.keys(ind);
+const headers = ["Time","Open","High","Low","Close", ...indicatorKeys];
+let csv = headers.join(',') + '\n';
+data.forEach((c, i)=>{
 const dt=new Date(c.time*1000).toISOString();
-csv+=`${dt},${c.open},${c.high},${c.low},${c.close}\n`;
+const row = [dt, c.open, c.high, c.low, c.close];
+indicatorKeys.forEach(key => {
+row.push(safeValue(ind[key][i]));
+});
+csv += row.join(',') + '\n';
 });
 const blob=new Blob([csv],{type:'text/csv'});
 const url=URL.createObjectURL(blob);
@@ -702,10 +709,17 @@ a.click();
 // Export XLSX
 function exportXLSX(){
 if(data.length===0){alert('No data');return}
-const rows=[['Time','Open','High','Low','Close']];
-data.forEach(c=>{
+const ind = calculateAllIndicators(data);
+const indicatorKeys = Object.keys(ind);
+const headers = ["Time","Open","High","Low","Close", ...indicatorKeys];
+const rows=[headers];
+data.forEach((c, i)=>{
 const dt=new Date(c.time*1000).toISOString();
-rows.push([dt,c.open,c.high,c.low,c.close]);
+const row = [dt, c.open, c.high, c.low, c.close];
+indicatorKeys.forEach(key => {
+row.push(safeValue(ind[key][i]));
+});
+rows.push(row);
 });
 const ws=XLSX.utils.aoa_to_sheet(rows);
 const wb=XLSX.utils.book_new();
